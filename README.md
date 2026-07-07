@@ -1,0 +1,172 @@
+# ra-port
+
+**Native macOS source port of Command & Conquer: Red Alert.**
+
+[![macOS](https://img.shields.io/badge/macOS-native-111111?logo=apple&logoColor=white)](#quick-start)
+[![Build](https://img.shields.io/badge/build-CMake%20%2B%20Ninja-064f8c)](#build-from-source)
+[![Runtime](https://img.shields.io/badge/runtime-SDL2-cc3333)](#current-status)
+[![Source-only](https://img.shields.io/badge/source--only-no%20game%20data-lightgrey)](#game-data)
+[![License](https://img.shields.io/badge/license-GPLv3%20with%20additional%20terms-blue)](#license-and-notice)
+
+`ra-port` brings the released Red Alert source code to modern platforms, starting with a native macOS build. It runs in a normal macOS window and uses SDL2 for the platform layer.
+
+![Red Alert running natively in a macOS window](docs/images/ra-port-macos-window.png)
+
+The repository contains only source code and build tooling. No game data is included. To play, provide legally obtained Red Alert assets from your own discs, mounted images, or local backups.
+
+## Why This Exists
+
+Red Alert was released for a very different desktop world. This project keeps the original code recognizable while replacing the old Windows platform assumptions with a small native runtime layer. The first target is macOS on Apple Silicon; the project name leaves room for future ports such as iOS and Android.
+
+This is an unofficial source port based on the source code Electronic Arts released under GPLv3 with additional terms: <https://github.com/electronicarts/CnC_Red_Alert>.
+
+## Current Status
+
+| Status | Feature | Notes |
+| --- | --- | --- |
+| :white_check_mark: | macOS on Apple Silicon | Builds and runs with CMake/Ninja. |
+| :white_check_mark: | Campaign | Allied and Soviet campaigns are fully working. |
+| :white_check_mark: | Skirmish | Local skirmish is fully working. |
+| :white_check_mark: | Videos | Intro and sneak peek videos play with sound. |
+| :white_check_mark: | Controls and audio | Keyboard, mouse, edge scrolling, saves, fullscreen, and audio work. |
+| :x: | Online/network multiplayer | Not wired up yet. |
+| :x: | Launcher/setup tools | Not ported. |
+| :x: | Expansion packs | Not a focus yet. |
+| :x: | `.app` bundle | Not packaged yet; the build creates a normal macOS executable. |
+
+## Quick Start
+
+Install the build tools:
+
+```sh
+brew install cmake ninja pkg-config sdl2
+xcode-select --install
+```
+
+Build the port:
+
+```sh
+cmake -S . -B build -G Ninja
+cmake --build build --target redalert_mac -j 8
+```
+
+Prepare local game data:
+
+```sh
+scripts/prepare_assets_from_local.sh \
+  --allies /path/to/allies-disc \
+  --soviet /path/to/soviet-disc
+```
+
+Run:
+
+```sh
+scripts/run_mac_dev.sh --no-build
+```
+
+## Game Data
+
+The repository contains only source code and build tooling. It does not contain game data, movies, music, disc images, archives, installers, generated palettes, or packaged executables.
+
+The asset preparation script copies from local paths that you provide:
+
+- `assets/redalert/allies`
+- `assets/redalert/soviet`
+
+Those directories are ignored by git. They should contain original disc-root style files such as `INSTALL/REDALERT.INI` and the base-game `.MIX` files.
+
+## Build From Source
+
+Configure and build:
+
+```sh
+cmake -S . -B build -G Ninja
+cmake --build build --target redalert_mac -j 8
+```
+
+If you do not have Ninja installed, omit `-G Ninja` and CMake will choose the default generator.
+
+The build currently creates a raw macOS executable:
+
+```sh
+build/redalert_mac
+```
+
+It is not packaged as a `.app` bundle yet.
+
+## Run
+
+The normal development run command builds if needed, verifies local assets, codesigns the executable, and launches from the repository root:
+
+```sh
+scripts/run_mac_dev.sh
+```
+
+Useful variants:
+
+```sh
+scripts/run_mac_dev.sh --no-build
+scripts/run_mac_dev.sh --prepare-only
+```
+
+You can also run the built executable directly after codesigning:
+
+```sh
+codesign --force --sign - build/redalert_mac
+./build/redalert_mac
+```
+
+Runtime files such as `SAVEGAME.*`, `OPTIONS.INI`, `ASSERT.TXT`, screenshots, logs, and generated palette caches are ignored by git.
+
+## Fullscreen
+
+Start fullscreen:
+
+```sh
+RA_FULLSCREEN=1 scripts/run_mac_dev.sh
+```
+
+Toggle fullscreen while running:
+
+```text
+Command+Return
+```
+
+## Tests
+
+Run the source-level tests and script checks:
+
+```sh
+tests/run_script_tests.sh
+```
+
+Validate a fresh checkout with a full build first:
+
+```sh
+cmake -S . -B build -G Ninja
+cmake --build build --target redalert_mac -j 8
+tests/run_script_tests.sh
+```
+
+## Project Layout
+
+| Path | Purpose |
+| --- | --- |
+| `CODE/` | Main Red Alert game code |
+| `PORT/MAC/` | macOS runtime, compatibility shims, SDL2 integration |
+| `WIN32LIB/`, `WINVQ/` | Legacy support libraries used by the port |
+| `scripts/` | Asset preparation, run helpers, smoke capture |
+| `tests/` | Focused source-level and shim tests |
+| `docs/images/` | README images only, not game data |
+
+## Contributing
+
+The port is intentionally conservative: keep original source layout and behavior recognizable, and prefer small platform-specific support files over broad rewrites. Good next areas are macOS packaging, Intel macOS validation, save/load hardening, expansion support, and eventually non-macOS platform layers.
+
+Network and online multiplayer are out of scope for the current milestone.
+
+## License And Notice
+
+The source code is distributed under GPLv3 with additional terms. See `LICENSE.md`.
+
+This is an unofficial modified source port. It is not affiliated with, endorsed by, sponsored by, or supported by Electronic Arts or any other rights holder. See `NOTICE.md`.

@@ -1,0 +1,576 @@
+#define SDL_MAIN_HANDLED
+#include <SDL.h>
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "../include/mac_sdl_runtime.h"
+#include <mmsystem.h>
+
+static SDL_Window *MacWindow = 0;
+static SDL_Renderer *MacRenderer = 0;
+static SDL_Texture *MacTexture = 0;
+static uint32_t *MacFrame = 0;
+static int MacFramePixels = 0;
+static int MacWidth = 0;
+static int MacHeight = 0;
+static bool MacSDLReady = false;
+static bool MacQuitRequested = false;
+static bool MacFullscreen = false;
+static SDL_threadID MacMainThread = 0;
+static uint32_t MacPalette[256];
+static MSG MacMessageQueue[512];
+static int MacMessageHead = 0;
+static int MacMessageTail = 0;
+static unsigned char MacKeyState[256];
+static unsigned char MacToggleState[256];
+static POINT MacMousePoint = {0, 0};
+
+LRESULT FAR PASCAL _export Windows_Procedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+static uint32_t mac_argb(unsigned char red, unsigned char green, unsigned char blue)
+{
+	return 0xFF000000U | ((uint32_t)red << 16) | ((uint32_t)green << 8) | (uint32_t)blue;
+}
+
+static void mac_default_palette(void)
+{
+	for (int index = 0; index < 256; ++index) {
+		MacPalette[index] = mac_argb((unsigned char)index, (unsigned char)index, (unsigned char)index);
+	}
+}
+
+static DWORD mac_now_ms(void)
+{
+	return (DWORD)SDL_GetTicks();
+}
+
+static bool mac_fullscreen_env_requested(void)
+{
+	char const *value = getenv("RA_FULLSCREEN");
+	if (!value || !value[0]) {
+		return false;
+	}
+	return strcmp(value, "0") != 0 && strcmp(value, "false") != 0 && strcmp(value, "FALSE") != 0 &&
+		strcmp(value, "no") != 0 && strcmp(value, "NO") != 0;
+}
+
+static LPARAM mac_pack_xy(int x, int y)
+{
+	return (LPARAM)(((y & 0xFFFF) << 16) | (x & 0xFFFF));
+}
+
+static void mac_to_logical_point(int *x, int *y)
+{
+	if (!x || !y || !MacWindow || MacWidth <= 0 || MacHeight <= 0) {
+		return;
+	}
+	int window_w = MacWidth;
+	int window_h = MacHeight;
+	SDL_GetWindowSize(MacWindow, &window_w, &window_h);
+	if (window_w > 0 && window_h > 0) {
+		*x = (*x * MacWidth) / window_w;
+		*y = (*y * MacHeight) / window_h;
+	}
+}
+
+static BOOL mac_queue_message(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	int next = (MacMessageTail + 1) % (int)(sizeof(MacMessageQueue) / sizeof(MacMessageQueue[0]));
+	if (next == MacMessageHead) {
+		return FALSE;
+	}
+	MSG *msg = &MacMessageQueue[MacMessageTail];
+	memset(msg, 0, sizeof(*msg));
+	msg->hwnd = hwnd;
+	msg->message = message;
+	msg->wParam = wparam;
+	msg->lParam = lparam;
+	msg->time = mac_now_ms();
+	msg->pt = MacMousePoint;
+	MacMessageTail = next;
+	return TRUE;
+}
+
+static int mac_pop_message(MSG *msg, bool remove)
+{
+	if (MacMessageHead == MacMessageTail) {
+		return FALSE;
+	}
+	if (msg) {
+		*msg = MacMessageQueue[MacMessageHead];
+	}
+	if (remove) {
+		MacMessageHead = (MacMessageHead + 1) % (int)(sizeof(MacMessageQueue) / sizeof(MacMessageQueue[0]));
+	}
+	return TRUE;
+}
+
+static int mac_vk_from_sdl(SDL_Keycode key)
+{
+	if (key >= SDLK_a && key <= SDLK_z) {
+		return 'A' + (int)(key - SDLK_a);
+	}
+	if (key >= SDLK_0 && key <= SDLK_9) {
+		return '0' + (int)(key - SDLK_0);
+	}
+	if (key >= SDLK_F1 && key <= SDLK_F12) {
+		return VK_F1 + (int)(key - SDLK_F1);
+	}
+
+	switch (key) {
+		case SDLK_RETURN: return VK_RETURN;
+		case SDLK_KP_ENTER: return VK_RETURN;
+		case SDLK_ESCAPE: return VK_ESCAPE;
+		case SDLK_SPACE: return VK_SPACE;
+		case SDLK_BACKSPACE: return VK_BACK;
+		case SDLK_TAB: return VK_TAB;
+		case SDLK_INSERT: return VK_INSERT;
+		case SDLK_DELETE: return VK_DELETE;
+		case SDLK_HOME: return VK_HOME;
+		case SDLK_END: return VK_END;
+		case SDLK_PAGEUP: return VK_PRIOR;
+		case SDLK_PAGEDOWN: return VK_NEXT;
+		case SDLK_LEFT: return VK_LEFT;
+		case SDLK_RIGHT: return VK_RIGHT;
+		case SDLK_UP: return VK_UP;
+		case SDLK_DOWN: return VK_DOWN;
+		case SDLK_PAUSE: return VK_PAUSE;
+		case SDLK_CAPSLOCK: return VK_CAPITAL;
+		case SDLK_NUMLOCKCLEAR: return VK_NUMLOCK;
+		case SDLK_KP_0: return VK_NUMPAD0;
+		case SDLK_KP_1: return VK_NUMPAD1;
+		case SDLK_KP_2: return VK_NUMPAD2;
+		case SDLK_KP_3: return VK_NUMPAD3;
+		case SDLK_KP_4: return VK_NUMPAD4;
+		case SDLK_KP_5: return VK_NUMPAD5;
+		case SDLK_KP_6: return VK_NUMPAD6;
+		case SDLK_KP_7: return VK_NUMPAD7;
+		case SDLK_KP_8: return VK_NUMPAD8;
+		case SDLK_KP_9: return VK_NUMPAD9;
+		case SDLK_KP_MULTIPLY: return VK_MULTIPLY;
+		case SDLK_KP_PLUS: return VK_ADD;
+		case SDLK_KP_MINUS: return VK_SUBTRACT;
+		case SDLK_KP_PERIOD: return VK_DECIMAL;
+		case SDLK_KP_DIVIDE: return VK_DIVIDE;
+		case SDLK_SEMICOLON: return VK_NONE_BA;
+		case SDLK_EQUALS: return VK_NONE_BB;
+		case SDLK_COMMA: return VK_NONE_BC;
+		case SDLK_MINUS: return VK_NONE_BD;
+		case SDLK_PERIOD: return VK_NONE_BE;
+		case SDLK_SLASH: return VK_NONE_BF;
+		case SDLK_BACKQUOTE: return VK_NONE_C0;
+		case SDLK_LEFTBRACKET: return VK_NONE_DB;
+		case SDLK_BACKSLASH: return VK_NONE_DC;
+		case SDLK_RIGHTBRACKET: return VK_NONE_DD;
+		case SDLK_QUOTE: return VK_NONE_DE;
+		case SDLK_LSHIFT:
+		case SDLK_RSHIFT: return VK_SHIFT;
+		case SDLK_LCTRL:
+		case SDLK_RCTRL: return VK_CONTROL;
+		case SDLK_LALT:
+		case SDLK_RALT:
+		case SDLK_LGUI:
+		case SDLK_RGUI: return VK_MENU;
+		default: break;
+	}
+	return 0;
+}
+
+static void mac_update_modifier_state(void)
+{
+	SDL_Keymod mods = SDL_GetModState();
+	MacKeyState[VK_SHIFT] = (mods & KMOD_SHIFT) ? 1 : 0;
+	MacKeyState[VK_CONTROL] = (mods & KMOD_CTRL) ? 1 : 0;
+	MacKeyState[VK_MENU] = (mods & KMOD_ALT) ? 1 : 0;
+	MacToggleState[VK_CAPITAL] = (mods & KMOD_CAPS) ? 1 : 0;
+	MacToggleState[VK_NUMLOCK] = (mods & KMOD_NUM) ? 1 : 0;
+}
+
+static bool mac_state_down(BYTE const *state, int key)
+{
+	if (state) {
+		return (state[key & 0xFF] & 0x80) != 0;
+	}
+	return MacKeyState[key & 0xFF] != 0;
+}
+
+static bool mac_state_toggled(BYTE const *state, int key)
+{
+	if (state) {
+		return (state[key & 0xFF] & 0x09) != 0;
+	}
+	return MacToggleState[key & 0xFF] != 0;
+}
+
+static int mac_write_ascii(LPWORD out, unsigned char ch)
+{
+	if (!out) {
+		return 0;
+	}
+	*out = (WORD)ch;
+	return 1;
+}
+
+static int mac_ascii_from_vk(UINT virt_key, BYTE const *state, LPWORD out)
+{
+	virt_key &= 0xFF;
+	bool shift = mac_state_down(state, VK_SHIFT);
+	bool caps = mac_state_toggled(state, VK_CAPITAL);
+
+	if (virt_key >= 'A' && virt_key <= 'Z') {
+		unsigned char base = (unsigned char)('a' + (virt_key - 'A'));
+		if (shift ^ caps) {
+			base = (unsigned char)('A' + (virt_key - 'A'));
+		}
+		return mac_write_ascii(out, base);
+	}
+
+	if (virt_key >= '0' && virt_key <= '9') {
+		static const char shifted[] = ")!@#$%^&*(";
+		unsigned char ch = shift ? (unsigned char)shifted[virt_key - '0'] : (unsigned char)virt_key;
+		return mac_write_ascii(out, ch);
+	}
+
+	if (virt_key >= VK_NUMPAD0 && virt_key <= VK_NUMPAD9) {
+		return mac_write_ascii(out, (unsigned char)('0' + (virt_key - VK_NUMPAD0)));
+	}
+
+	switch (virt_key) {
+		case VK_SPACE: return mac_write_ascii(out, ' ');
+		case VK_TAB: return mac_write_ascii(out, '\t');
+		case VK_RETURN: return mac_write_ascii(out, '\r');
+		case VK_BACK: return mac_write_ascii(out, '\b');
+		case VK_MULTIPLY: return mac_write_ascii(out, '*');
+		case VK_ADD: return mac_write_ascii(out, '+');
+		case VK_SEPARATOR: return mac_write_ascii(out, ',');
+		case VK_SUBTRACT: return mac_write_ascii(out, '-');
+		case VK_DECIMAL: return mac_write_ascii(out, '.');
+		case VK_DIVIDE: return mac_write_ascii(out, '/');
+		case VK_NONE_BA: return mac_write_ascii(out, shift ? ':' : ';');
+		case VK_NONE_BB: return mac_write_ascii(out, shift ? '+' : '=');
+		case VK_NONE_BC: return mac_write_ascii(out, shift ? '<' : ',');
+		case VK_NONE_BD: return mac_write_ascii(out, shift ? '_' : '-');
+		case VK_NONE_BE: return mac_write_ascii(out, shift ? '>' : '.');
+		case VK_NONE_BF: return mac_write_ascii(out, shift ? '?' : '/');
+		case VK_NONE_C0: return mac_write_ascii(out, shift ? '~' : '`');
+		case VK_NONE_DB: return mac_write_ascii(out, shift ? '{' : '[');
+		case VK_NONE_DC: return mac_write_ascii(out, shift ? '|' : '\\');
+		case VK_NONE_DD: return mac_write_ascii(out, shift ? '}' : ']');
+		case VK_NONE_DE: return mac_write_ascii(out, shift ? '"' : '\'');
+		default: return 0;
+	}
+}
+
+static int mac_vk_from_button(unsigned char button)
+{
+	switch (button) {
+		case SDL_BUTTON_LEFT: return VK_LBUTTON;
+		case SDL_BUTTON_RIGHT: return VK_RBUTTON;
+		case SDL_BUTTON_MIDDLE: return VK_MBUTTON;
+		default: return 0;
+	}
+}
+
+static void mac_destroy_video_objects(void)
+{
+	if (MacTexture) {
+		SDL_DestroyTexture(MacTexture);
+		MacTexture = 0;
+	}
+	if (MacRenderer) {
+		SDL_DestroyRenderer(MacRenderer);
+		MacRenderer = 0;
+	}
+	if (MacWindow) {
+		SDL_DestroyWindow(MacWindow);
+		MacWindow = 0;
+	}
+}
+
+bool MacSDL_SetFullscreen(bool enabled)
+{
+	MacFullscreen = enabled;
+	if (!MacWindow) {
+		return true;
+	}
+	if (SDL_SetWindowFullscreen(MacWindow, enabled ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0) != 0) {
+		return false;
+	}
+	MacFullscreen = enabled;
+	return true;
+}
+
+bool MacSDL_GetFullscreen(void)
+{
+	return MacFullscreen;
+}
+
+bool MacSDL_SetMode(int width, int height)
+{
+	if (width <= 0 || height <= 0) {
+		return false;
+	}
+
+	if (!MacSDLReady) {
+		SDL_SetMainReady();
+		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
+		if (SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
+			return false;
+		}
+		MacSDLReady = true;
+		MacMainThread = SDL_ThreadID();
+		mac_update_modifier_state();
+		mac_default_palette();
+	}
+
+	if (MacWindow && MacWidth == width && MacHeight == height) {
+		if (mac_fullscreen_env_requested() && !MacFullscreen) {
+			MacSDL_SetFullscreen(true);
+		}
+		return true;
+	}
+
+	mac_destroy_video_objects();
+	MacWidth = width;
+	MacHeight = height;
+
+	if (mac_fullscreen_env_requested()) {
+		MacFullscreen = true;
+	}
+	Uint32 window_flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+	if (MacFullscreen) {
+		window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+	}
+	MacWindow = SDL_CreateWindow("Command & Conquer: Red Alert", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, window_flags);
+	if (!MacWindow) {
+		return false;
+	}
+
+	MacRenderer = SDL_CreateRenderer(MacWindow, -1, SDL_RENDERER_SOFTWARE);
+	if (!MacRenderer) {
+		mac_destroy_video_objects();
+		return false;
+	}
+
+	SDL_RenderSetLogicalSize(MacRenderer, width, height);
+	MacTexture = SDL_CreateTexture(MacRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+	return MacTexture != 0;
+}
+
+void MacSDL_Shutdown(void)
+{
+	if (MacFrame) {
+		free(MacFrame);
+		MacFrame = 0;
+		MacFramePixels = 0;
+	}
+	mac_destroy_video_objects();
+	if (MacSDLReady) {
+		SDL_QuitSubSystem(SDL_INIT_EVENTS | SDL_INIT_VIDEO);
+		MacSDLReady = false;
+		MacMainThread = 0;
+	}
+}
+
+void MacSDL_SetPalette(PALETTEENTRY const *entries, int count)
+{
+	if (!entries) {
+		return;
+	}
+	if (count > 256) {
+		count = 256;
+	}
+	for (int index = 0; index < count; ++index) {
+		MacPalette[index] = mac_argb(entries[index].peRed, entries[index].peGreen, entries[index].peBlue);
+	}
+}
+
+void MacSDL_PumpEvents(void)
+{
+	if (!MacSDLReady) {
+		return;
+	}
+	if (MacMainThread && SDL_ThreadID() != MacMainThread) {
+		return;
+	}
+	MacMM_PumpTimers();
+	SDL_Event event;
+	while (SDL_PollEvent(&event)) {
+		switch (event.type) {
+			case SDL_QUIT:
+				MacQuitRequested = true;
+				mac_queue_message((HWND)(intptr_t)1, WM_DESTROY, 0, 0);
+				break;
+
+			case SDL_MOUSEMOTION: {
+				int x = event.motion.x;
+				int y = event.motion.y;
+				mac_to_logical_point(&x, &y);
+				MacMousePoint.x = x;
+				MacMousePoint.y = y;
+				mac_queue_message((HWND)(intptr_t)1, WM_MOUSEMOVE, 0, mac_pack_xy(x, y));
+				break;
+			}
+
+			case SDL_MOUSEBUTTONDOWN:
+			case SDL_MOUSEBUTTONUP: {
+				int vk = mac_vk_from_button(event.button.button);
+				if (!vk) {
+					break;
+				}
+				int x = event.button.x;
+				int y = event.button.y;
+				mac_to_logical_point(&x, &y);
+				MacMousePoint.x = x;
+				MacMousePoint.y = y;
+				MacKeyState[vk & 0xFF] = (event.type == SDL_MOUSEBUTTONDOWN) ? 1 : 0;
+				UINT message = WM_LBUTTONDOWN;
+				if (vk == VK_RBUTTON) {
+					message = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_RBUTTONDOWN : WM_RBUTTONUP;
+				} else if (vk == VK_MBUTTON) {
+					message = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_MBUTTONDOWN : WM_MBUTTONUP;
+				} else {
+					message = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_LBUTTONDOWN : WM_LBUTTONUP;
+				}
+				mac_queue_message((HWND)(intptr_t)1, message, (WPARAM)vk, mac_pack_xy(x, y));
+				break;
+			}
+
+			case SDL_KEYDOWN:
+			case SDL_KEYUP: {
+				if (event.type == SDL_KEYDOWN && !event.key.repeat &&
+						(event.key.keysym.sym == SDLK_RETURN || event.key.keysym.sym == SDLK_KP_ENTER) &&
+						(event.key.keysym.mod & (KMOD_GUI | KMOD_ALT))) {
+					MacSDL_SetFullscreen(!MacFullscreen);
+					break;
+				}
+				int vk = mac_vk_from_sdl(event.key.keysym.sym);
+				if (!vk) {
+					break;
+				}
+				MacKeyState[vk & 0xFF] = (event.type == SDL_KEYDOWN) ? 1 : 0;
+				mac_update_modifier_state();
+				mac_queue_message((HWND)(intptr_t)1, event.type == SDL_KEYDOWN ? WM_KEYDOWN : WM_KEYUP, (WPARAM)vk, 0);
+				break;
+			}
+
+			default:
+				break;
+		}
+	}
+}
+
+bool MacSDL_QuitRequested(void)
+{
+	return MacQuitRequested;
+}
+
+void MacSDL_Present8(unsigned char const *pixels, int width, int height, int pitch)
+{
+	if (!pixels || width <= 0 || height <= 0) {
+		return;
+	}
+	if (MacMainThread && SDL_ThreadID() != MacMainThread) {
+		return;
+	}
+
+	MacSDL_PumpEvents();
+	if (!MacRenderer || !MacTexture) {
+		return;
+	}
+
+	int needed = width * height;
+	if (needed > MacFramePixels) {
+		uint32_t *new_frame = (uint32_t *)realloc(MacFrame, (size_t)needed * sizeof(uint32_t));
+		if (!new_frame) {
+			return;
+		}
+		MacFrame = new_frame;
+		MacFramePixels = needed;
+	}
+
+	for (int y = 0; y < height; ++y) {
+		unsigned char const *src = pixels + (y * pitch);
+		uint32_t *dst = MacFrame + (y * width);
+		for (int x = 0; x < width; ++x) {
+			dst[x] = MacPalette[src[x]];
+		}
+	}
+
+	SDL_UpdateTexture(MacTexture, 0, MacFrame, width * (int)sizeof(uint32_t));
+	SDL_RenderClear(MacRenderer);
+	SDL_RenderCopy(MacRenderer, MacTexture, 0, 0);
+	SDL_RenderPresent(MacRenderer);
+}
+
+extern "C" BOOL MacWin_PeekMessage(MSG *msg, HWND, UINT, UINT, UINT remove)
+{
+	MacSDL_PumpEvents();
+	return mac_pop_message(msg, (remove & PM_REMOVE) != 0);
+}
+
+extern "C" BOOL MacWin_GetMessage(MSG *msg, HWND, UINT, UINT)
+{
+	MacSDL_PumpEvents();
+	if (!mac_pop_message(msg, true)) {
+		return FALSE;
+	}
+	return msg && msg->message == WM_QUIT ? FALSE : TRUE;
+}
+
+extern "C" BOOL MacWin_TranslateMessage(MSG const *)
+{
+	return TRUE;
+}
+
+extern "C" LRESULT MacWin_DispatchMessage(MSG const *msg)
+{
+	if (!msg) {
+		return 0;
+	}
+	return Windows_Procedure(msg->hwnd, msg->message, msg->wParam, msg->lParam);
+}
+
+extern "C" BOOL MacWin_PostMessage(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	return mac_queue_message(hwnd, message, wparam, lparam);
+}
+
+extern "C" void MacWin_PostQuitMessage(int code)
+{
+	mac_queue_message((HWND)(intptr_t)1, WM_QUIT, (WPARAM)code, 0);
+}
+
+extern "C" short MacWin_GetAsyncKeyState(int key)
+{
+	key &= 0xFF;
+	return MacKeyState[key] ? (short)0x8000 : 0;
+}
+
+extern "C" short MacWin_GetKeyState(int key)
+{
+	key &= 0xFF;
+	short state = MacKeyState[key] ? (short)0x8000 : 0;
+	if (MacToggleState[key]) {
+		state |= (short)0x0009;
+	}
+	return state;
+}
+
+extern "C" int MacWin_ToAscii(UINT virt_key, UINT, BYTE const *key_state, LPWORD trans_key, UINT)
+{
+	if (mac_state_down(key_state, VK_CONTROL) || mac_state_down(key_state, VK_MENU)) {
+		return 0;
+	}
+	return mac_ascii_from_vk(virt_key, key_state, trans_key);
+}
+
+extern "C" BOOL MacWin_GetCursorPos(LPPOINT point)
+{
+	if (point) {
+		*point = MacMousePoint;
+	}
+	return TRUE;
+}
