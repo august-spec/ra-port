@@ -129,12 +129,12 @@ static void mac_queue_mouse_motion(int x, int y)
 
 static void mac_queue_mouse_button_with_cursor(int vk, bool down, int x, int y, bool update_cursor)
 {
+	MacMousePoint.x = x;
+	MacMousePoint.y = y;
 	if (update_cursor) {
 #if defined(__ANDROID__)
 		AndroidTouchCursorHidden = false;
 #endif
-		MacMousePoint.x = x;
-		MacMousePoint.y = y;
 	}
 	MacKeyState[vk & 0xFF] = down ? 1 : 0;
 	UINT message = down ? WM_LBUTTONDOWN : WM_LBUTTONUP;

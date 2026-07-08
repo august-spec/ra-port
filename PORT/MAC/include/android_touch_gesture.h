@@ -126,7 +126,7 @@ static inline void AndroidTouchGesture_Begin(
 		touch->secondary_finger = finger;
 		touch->tap_cancelled = 1;
 		if (touch->left_down) {
-			AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_UP, touch->last_x, touch->last_y, 1);
+			AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_UP, touch->last_x, touch->last_y, 0);
 			touch->left_down = 0;
 			touch->dragging = 0;
 		}
@@ -210,7 +210,7 @@ static inline void AndroidTouchGesture_End(
 		if (x != touch->last_x || y != touch->last_y) {
 			AndroidTouchGesture_Add(out, ANDROID_TOUCH_MOUSE_MOVE, x, y, 1);
 		}
-		AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_UP, x, y, 1);
+		AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_UP, x, y, 0);
 	} else if (!touch->long_press_sent && !touch->tap_cancelled) {
 		AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_DOWN, x, y, 0);
 		AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_UP, x, y, 0);

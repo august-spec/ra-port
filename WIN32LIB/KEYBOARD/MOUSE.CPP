@@ -27,6 +27,9 @@
 
 #include "mouse.h"
 #include <mmsystem.h>
+#if defined(__ANDROID__)
+#include "mac_sdl_runtime.h"
+#endif
 
 static WWMouseClass *_Mouse=NULL;
 void CALLBACK Process_Mouse( UINT event_id, UINT res1 , DWORD user, DWORD  res2, DWORD  res3 );
@@ -181,6 +184,20 @@ void WWMouseClass::Process_Mouse(void)
 	if (!Screen || !_Mouse || State > 0 || MouseUpdate || EraseFlags || !GameInFocus)
 		return;
 
+#if defined(__ANDROID__)
+	if (MacSDL_TouchCursorHidden()) {
+		if (MouseBuffX != -1 || MouseBuffY != -1) {
+			if (Screen->Lock()) {
+				Mouse_Shadow_Buffer(this, Screen, MouseBuffer, MouseBuffX, MouseBuffY, MouseXHot, MouseYHot, 0);
+				Screen->Unlock();
+			}
+			MouseBuffX = -1;
+			MouseBuffY = -1;
+		}
+		return;
+	}
+#endif
+
 	//
 	// Make sure there are no conflicts with other
 	// threads that may try and lock the screen buffer
@@ -318,6 +335,13 @@ void WWMouseClass::Low_Show_Mouse(int x, int y)
 	// position.
 	//
 	if (!State)	{
+#if defined(__ANDROID__)
+		if (MacSDL_TouchCursorHidden()) {
+			MouseBuffX = -1;
+			MouseBuffY = -1;
+			return;
+		}
+#endif
 		//
 		// Try to lock the screen til we sucessfully get a lock.
 		//
@@ -445,6 +469,9 @@ void WWMouseClass::Draw_Mouse(GraphicViewPortClass *scr)
 	POINT pt;
 
 	if (State != 0) return;
+#if defined(__ANDROID__)
+	if (MacSDL_TouchCursorHidden()) return;
+#endif
 	MouseUpdate++;
 	//
 	//	Get the position that the mouse is currently located at

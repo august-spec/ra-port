@@ -42,6 +42,25 @@ static void test_drag_holds_left_button_after_slop(void)
 	assert(out.count == 2);
 	assert(out.events[0].type == ANDROID_TOUCH_MOUSE_MOVE);
 	assert(out.events[1].type == ANDROID_TOUCH_LEFT_UP);
+	assert(out.events[1].update_cursor == 0);
+}
+
+static void test_two_finger_pan_releases_drag_without_lingering_cursor(void)
+{
+	AndroidTouchGesture touch;
+	AndroidTouchGestureOutput out;
+
+	AndroidTouchGesture_Init(&touch);
+	AndroidTouchGesture_Begin(&touch, 5, 50, 60, 2500, &out);
+	AndroidTouchGesture_Move(&touch, 5, 70, 60, &out);
+	assert(out.count == 2);
+	assert(out.events[0].type == ANDROID_TOUCH_LEFT_DOWN);
+	assert(out.events[0].update_cursor == 1);
+
+	AndroidTouchGesture_Begin(&touch, 6, 80, 90, 2510, &out);
+	assert(out.count == 1);
+	assert(out.events[0].type == ANDROID_TOUCH_LEFT_UP);
+	assert(out.events[0].update_cursor == 0);
 }
 
 static void test_long_press_is_right_click(void)
@@ -104,6 +123,7 @@ int main(void)
 {
 	test_tap_clicks_on_release();
 	test_drag_holds_left_button_after_slop();
+	test_two_finger_pan_releases_drag_without_lingering_cursor();
 	test_long_press_is_right_click();
 	test_small_motion_does_not_hover();
 	test_two_finger_pan_cancels_tap();

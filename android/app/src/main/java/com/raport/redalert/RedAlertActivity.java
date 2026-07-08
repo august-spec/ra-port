@@ -1,20 +1,19 @@
 package com.raport.redalert;
 
+import android.annotation.TargetApi;
 import android.content.res.AssetManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
-import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
-import android.widget.Button;
-import android.widget.FrameLayout;
-import android.widget.LinearLayout;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -41,8 +40,8 @@ public class RedAlertActivity extends SDLActivity {
         configureImmersiveMode();
         extractBundledAssets();
         super.onCreate(savedInstanceState);
+        registerBackCallback();
         configureImmersiveMode();
-        installOverlayControls();
     }
 
     @Override
@@ -57,6 +56,25 @@ public class RedAlertActivity extends SDLActivity {
         if (hasFocus) {
             configureImmersiveMode();
         }
+    }
+
+    private void registerBackCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerOnBackInvokedCallback();
+        }
+    }
+
+    @TargetApi(Build.VERSION_CODES.TIRAMISU)
+    private void registerOnBackInvokedCallback() {
+        getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+            OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+            new OnBackInvokedCallback() {
+                @Override
+                public void onBackInvoked() {
+                    sendEscapePulse();
+                }
+            }
+        );
     }
 
     private void configureImmersiveMode() {
@@ -88,52 +106,36 @@ public class RedAlertActivity extends SDLActivity {
         }
     }
 
-    private void installOverlayControls() {
-        LinearLayout controls = new LinearLayout(this);
-        controls.setOrientation(LinearLayout.VERTICAL);
-        controls.setAlpha(0.66f);
-        controls.setPadding(dp(3), dp(3), dp(3), dp(3));
-
-        addKeyButton(controls, "Esc", KeyEvent.KEYCODE_ESCAPE);
-        addKeyButton(controls, "Sel", KeyEvent.KEYCODE_E);
-        addKeyButton(controls, "Fix", KeyEvent.KEYCODE_T);
-        addKeyButton(controls, "Sell", KeyEvent.KEYCODE_Y);
-        addKeyButton(controls, "Map", KeyEvent.KEYCODE_U);
-
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.START | Gravity.CENTER_VERTICAL
-        );
-        params.leftMargin = dp(2);
-        addContentView(controls, params);
+    @Override
+    public void onBackPressed() {
+        sendEscapePulse();
     }
 
-    private void addKeyButton(LinearLayout controls, String label, final int keyCode) {
-        Button button = new Button(this);
-        button.setText(label);
-        button.setTextSize(10.0f);
-        button.setAllCaps(false);
-        button.setMinWidth(dp(34));
-        button.setMinHeight(dp(30));
-        button.setPadding(dp(3), 0, dp(3), 0);
-        button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                sendKeyPulse(keyCode);
-            }
-        });
-        controls.addView(button);
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+            KeyEvent escapeEvent = new KeyEvent(
+                event.getDownTime(),
+                event.getEventTime(),
+                event.getAction(),
+                KeyEvent.KEYCODE_ESCAPE,
+                event.getRepeatCount(),
+                event.getMetaState(),
+                event.getDeviceId(),
+                event.getScanCode(),
+                event.getFlags(),
+                event.getSource()
+            );
+            super.dispatchKeyEvent(escapeEvent);
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
     }
 
-    private void sendKeyPulse(int keyCode) {
+    private void sendEscapePulse() {
         long now = SystemClock.uptimeMillis();
-        dispatchKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0));
-        dispatchKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0));
-    }
-
-    private int dp(int value) {
-        return (int)(value * getResources().getDisplayMetrics().density + 0.5f);
+        dispatchKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE, 0));
+        dispatchKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ESCAPE, 0));
     }
 
     private void extractBundledAssets() {

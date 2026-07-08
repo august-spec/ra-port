@@ -191,7 +191,13 @@ void TabClass::AI(KeyNumType &input, int x, int y)
 		**	in certain areas. If the special scroll modification is not active, then
 		**	the tabs never work when the mouse is at the top of the screen.
 		*/
-		if (y > 0) {
+#if defined(__ANDROID__)
+		// Android touch taps can land on the exact top row; keep the visible tab fully tappable.
+		bool y_ok = y >= 0;
+#else
+		bool y_ok = y > 0;
+#endif
+		if (y_ok) {
 			ok = true;
 		}
 

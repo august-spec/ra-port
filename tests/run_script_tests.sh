@@ -112,8 +112,16 @@ assert_file_contains android/app/src/main/AndroidManifest.xml "landscape"
 assert_file_contains android/app/src/main/AndroidManifest.xml "appCategory=\"game\""
 assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "SDLActivity"
 assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "extractBundledAssets"
-assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "controls.setOrientation(LinearLayout.VERTICAL)"
-assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "Gravity.START | Gravity.CENTER_VERTICAL"
+assert_file_not_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "installOverlayControls"
+assert_file_not_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "addKeyButton"
+assert_file_not_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "addContentView(controls"
+assert_file_not_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "LinearLayout.VERTICAL"
+assert_file_not_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "Gravity.START | Gravity.CENTER_VERTICAL"
+assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "KEYCODE_BACK"
+assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "KEYCODE_ESCAPE"
+assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "onBackPressed"
+assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "OnBackInvokedDispatcher"
+assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "registerOnBackInvokedCallback"
 assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"
 assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars()"
 assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "SYSTEM_UI_FLAG_IMMERSIVE_STICKY"
@@ -125,6 +133,21 @@ assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "SDL_RENDERER_ACCELERATED"
 assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "mac_android_idle_delay"
 assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "SDL_Delay(1)"
 assert_file_not_contains PORT/MAC/src/mac_sdl_runtime.cpp "RA_PERF"
+assert_file_contains CODE/TAB.CPP "Android touch taps can land on the exact top row"
+assert_file_contains WIN32LIB/KEYBOARD/MOUSE.CPP "mac_sdl_runtime.h"
+assert_file_contains WIN32LIB/KEYBOARD/MOUSE.CPP "MacSDL_TouchCursorHidden()"
+
+perl -0ne 'exit(/static void mac_queue_mouse_button_with_cursor\([^\)]*\)\s*\{\s*MacMousePoint\.x\s*=\s*x;\s*MacMousePoint\.y\s*=\s*y;[\s\S]*?if \(update_cursor\)/s ? 0 : 1)' "$ROOT_DIR/PORT/MAC/src/mac_sdl_runtime.cpp" \
+  || fail "Android tap button events must update the legacy cursor position even when the touch cursor stays hidden"
+
+perl -0ne 'exit(/void TabClass::AI\(KeyNumType &input, int x, int y\)[\s\S]*#if defined\(__ANDROID__\)[\s\S]*bool y_ok = y >= 0;[\s\S]*#else[\s\S]*bool y_ok = y > 0;[\s\S]*#endif/s ? 0 : 1)' "$ROOT_DIR/CODE/TAB.CPP" \
+  || fail "Android top tab clicks must accept the exact top row without changing desktop edge behavior"
+
+perl -0ne 'exit(/void WWMouseClass::Low_Show_Mouse\(int x, int y\)[\s\S]*MacSDL_TouchCursorHidden\(\)[\s\S]*MouseBuffX\s*=\s*-1[\s\S]*MouseBuffY\s*=\s*-1[\s\S]*return/s ? 0 : 1)' "$ROOT_DIR/WIN32LIB/KEYBOARD/MOUSE.CPP" \
+  || fail "Android touch-hidden mode must suppress low-level software cursor drawing without leaving stale mouse backing coordinates"
+
+perl -0ne 'exit(/void WWMouseClass::Draw_Mouse\(GraphicViewPortClass \*scr\)[\s\S]*MacSDL_TouchCursorHidden\(\)[\s\S]*return/s ? 0 : 1)' "$ROOT_DIR/WIN32LIB/KEYBOARD/MOUSE.CPP" \
+  || fail "Android touch-hidden mode must suppress explicit software cursor draws"
 
 for ignored_runtime_file in \
   "SAVEGAME.*" \
