@@ -10,6 +10,7 @@
 
 #include <wwstd.h>
 #include "wsa.h"
+#include "wsa_file_format.h"
 #include <wwmem.h>
 #include <file.h>
 #include <misc.h>
@@ -79,12 +80,11 @@ typedef struct {
 	unsigned short pixel_height;
 	unsigned short largest_frame_size;
 	short	flags;
-	unsigned long frame0_offset;
-	unsigned long frame0_end;
-	/* unsigned long data_seek_offset, unsigned short frame_size ... */
+	unsigned short reserved;
+	uint32_t frame0_offset;
+	uint32_t frame0_end;
+	/* uint32_t data_seek_offset, unsigned short frame_size ... */
 } WSA_FileHeaderType;
-
-#define WSA_FILE_HEADER_SIZE	( sizeof(WSA_FileHeaderType) - (2 * sizeof(unsigned long)) )
 
 /*=========================================================================*/
 /* The following PRIVATE functions are in this file:                       */
@@ -145,7 +145,7 @@ void * __cdecl Open_Animation(char const *file_name, char *user_buffer, long use
 		palette_adjust	 = 768;
 
 		if (palette != NULL) {
-			Seek_File(fh, sizeof(unsigned long) * (file_header.total_frames), SEEK_CUR);
+			Seek_File(fh, WSA_FILE_OFFSET_SIZE * (file_header.total_frames), SEEK_CUR);
 			Read_File(fh, palette, 768L);
 		}
 
@@ -967,24 +967,7 @@ unsigned long __cdecl Get_Animation_Size(void const *handle)
  *=========================================================================*/
 PRIVATE unsigned long Get_Resident_Frame_Offset( char *file_buffer, int frame )
 {
-	unsigned long frame0_size;
-	unsigned long *lptr;
-
-	// If there is a frame 0, the calculate its size.
-	lptr = (unsigned long *) file_buffer;
-
-	if (*lptr) {
-		frame0_size = lptr[1] - *lptr;
-	} else {
-	 	frame0_size = 0;
-	}
-
-	// Return the offset into RAM for the frame.
-	lptr += frame;
-	if (*lptr)
-			return (*lptr - (frame0_size + WSA_FILE_HEADER_SIZE));
-	else
-		return (0L);
+	return WSA_Resident_Frame_Offset(file_buffer, frame);
 }
 
 
@@ -1003,11 +986,11 @@ PRIVATE unsigned long Get_Resident_Frame_Offset( char *file_buffer, int frame )
  *=========================================================================*/
 PRIVATE unsigned long Get_File_Frame_Offset( int file_handle, int frame, int palette_adjust)
 {
-	unsigned long offset;
+	uint32_t offset;
 
-	Seek_File(file_handle, (frame << 2) + WSA_FILE_HEADER_SIZE, SEEK_SET);
+	Seek_File(file_handle, (frame * WSA_FILE_OFFSET_SIZE) + WSA_FILE_HEADER_SIZE, SEEK_SET);
 
-	if (Read_File(file_handle, (char *) &offset, sizeof(unsigned long)) != sizeof(unsigned long)) {
+	if (Read_File(file_handle, (char *) &offset, WSA_FILE_OFFSET_SIZE) != WSA_FILE_OFFSET_SIZE) {
 		offset = 0L;
 	}
 	offset += palette_adjust;
@@ -1098,4 +1081,3 @@ PRIVATE BOOL Apply_Delta(SysAnimHeaderType *sys_header, int curr_frame, char *de
 
 	return(TRUE);
 }
-

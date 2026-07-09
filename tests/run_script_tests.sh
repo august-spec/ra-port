@@ -372,6 +372,10 @@ trap 'rm -rf "$tmpdir"' EXIT
   "$ROOT_DIR/tests/mobile_rubber_band_test.cpp" -o "$tmpdir/mobile_rubber_band_test"
 "$tmpdir/mobile_rubber_band_test"
 
+"${CXX:-c++}" -std=gnu++98 -I"$ROOT_DIR/WIN32LIB/WSA" \
+  "$ROOT_DIR/tests/wsa_file_format_test.cpp" -o "$tmpdir/wsa_file_format_test"
+"$tmpdir/wsa_file_format_test"
+
 "${CXX:-c++}" -std=gnu++98 -DTRUE_FALSE_DEFINED -I"$ROOT_DIR/PORT/MAC/include" -I"$ROOT_DIR/WIN32LIB/SHAPE" -I"$ROOT_DIR/WIN32LIB/INCLUDE" \
   "$ROOT_DIR/tests/shape_extract_test.cpp" "$ROOT_DIR/WIN32LIB/SHAPE/GETSHAPE.CPP" -o "$tmpdir/shape_extract_test"
 "$tmpdir/shape_extract_test"
