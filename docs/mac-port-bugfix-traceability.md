@@ -1,6 +1,6 @@
 # macOS Port Bugfix Traceability
 
-This note documents three macOS/runtime bugs found while testing the Red Alert
+This note documents four macOS/runtime bugs found while testing the Red Alert
 port with the original campaign assets. It is intended as PR context for
 maintainers and as a future debugging breadcrumb.
 
@@ -125,6 +125,61 @@ Changed files:
 
 - `CODE/TACTION.CPP`
 - `CODE/TEVENT.CPP`
+- `tests/run_script_tests.sh`
+
+## 4. Map Selection WSA Animation Crash
+
+### Symptom
+
+After winning a campaign mission, the game crashed while entering the next-map
+selection animation. The macOS crash report showed this path:
+
+`Do_Win()` -> `Map_Selection()` -> `Animate_Frame()` -> `Apply_Delta()` ->
+`Mem_Copy()` -> `_platform_memmove`
+
+The register dump showed impossible patterned source, destination, and length
+values for the copy.
+
+### Traceability
+
+- Win flow: `CODE/SCENARIO.CPP`, `Do_Win()`
+- Map selection animation flow: `CODE/MAPSEL.CPP`, `Map_Selection()`
+- WSA loader and decoder: `WIN32LIB/WSA/WSA.CPP`
+- Crash site: `WIN32LIB/WSA/WSA.CPP`, `Apply_Delta()`
+- Regression check: `tests/run_script_tests.sh`
+
+### Root Cause
+
+The WSA file format stores frame offsets as 32-bit little-endian values. The
+port read those offsets through `unsigned long` fields and `unsigned long *`
+resident-table casts. On macOS ARM64, `unsigned long` is 64-bit, so adjacent
+32-bit frame offsets were combined into bogus 64-bit values. `Apply_Delta()`
+then computed a huge unsigned frame size and passed it to `Mem_Copy()`.
+
+The same loader also used native `unsigned long` width in the WSA file-header
+layout and in the historical delta-buffer size adjustment. Those are file-format
+values and must not change with the host ABI.
+
+### Fix
+
+Make the WSA on-disk layout explicit and validate deltas before copying:
+
+- Use fixed-width `uint16_t`, `int16_t`, and `uint32_t` fields for the WSA file
+  header.
+- Size the WSA file header using `sizeof(uint32_t)`, not host
+  `sizeof(unsigned long)`.
+- Read resident frame offsets through an unaligned-safe 32-bit helper.
+- Use the fixed legacy 37-byte ANIMATE header adjustment when converting the
+  file's delta buffer size to this native in-memory layout.
+- Preserve zero frame-offset sentinels when applying palette offsets in the
+  disk-backed WSA path.
+- Reject invalid offset order and frame data larger than the delta buffer before
+  calling `Mem_Copy()`.
+- Return failure for null animation handles before dereferencing them.
+
+Changed files:
+
+- `WIN32LIB/WSA/WSA.CPP`
 - `tests/run_script_tests.sh`
 
 ## Verification

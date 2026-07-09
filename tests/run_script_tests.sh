@@ -279,6 +279,30 @@ perl -0ne 'exit(/void Speak\(VoxType voice\)\s*\{(?:(?!void Speak_AI)[\s\S])*Is_
 perl -0ne 'exit(/void Speak_AI\(void\)\s*\{(?:(?!_makepath)[\s\S])*if \(!Is_Valid_Speech\(SpeakQueue\)\)[\s\S]*SpeakQueue = VOX_NONE[\s\S]*_makepath\(name, NULL, NULL, Speech\[SpeakQueue\]/s ? 0 : 1)' "$ROOT_DIR/CODE/AUDIO.CPP" \
   || fail "Speak_AI must clear invalid queued speech ids before indexing the Speech table"
 
+perl -0ne 'exit(/typedef struct[\s\S]*uint32_t\s+frame0_offset;[\s\S]*uint32_t\s+frame0_end;[\s\S]*WSA_FileHeaderType/s ? 0 : 1)' "$ROOT_DIR/WIN32LIB/WSA/WSA.CPP" \
+  || fail "WSA file headers must use fixed 32-bit frame offsets on LP64 platforms"
+
+grep -F 'sizeof(uint32_t)' "$ROOT_DIR/WIN32LIB/WSA/WSA.CPP" >/dev/null \
+  || fail "WSA file header sizing must not depend on host unsigned long width"
+
+grep -F 'sizeof(unsigned long)' "$ROOT_DIR/WIN32LIB/WSA/WSA.CPP" >/dev/null \
+  && fail "WSA file-format reads must not use host unsigned long width"
+
+grep -F 'WSA_ANIMATE_HEADER_SIZE' "$ROOT_DIR/WIN32LIB/WSA/WSA.CPP" >/dev/null \
+  || fail "WSA delta buffer sizing must use the fixed legacy 37-byte animation header adjustment"
+
+perl -0ne 'exit(/PRIVATE uint32_t Read_WSA_Offset[\s\S]*memmove\(&offset/s ? 0 : 1)' "$ROOT_DIR/WIN32LIB/WSA/WSA.CPP" \
+  || fail "resident WSA frame offsets must be read as unaligned 32-bit file values"
+
+perl -0ne 'exit(/if \(offset\) \{\s*offset \+= palette_adjust;\s*\}/s ? 0 : 1)' "$ROOT_DIR/WIN32LIB/WSA/WSA.CPP" \
+  || fail "disk WSA frame offset reads must preserve zero offset sentinels"
+
+grep -F 'unsigned long *lptr' "$ROOT_DIR/WIN32LIB/WSA/WSA.CPP" >/dev/null \
+  && fail "resident WSA frame offsets must not be read through host-width unsigned long pointers"
+
+perl -0ne 'exit(/frame_data_size > sys_header->largest_frame_size[\s\S]*return\(FALSE\)/s ? 0 : 1)' "$ROOT_DIR/WIN32LIB/WSA/WSA.CPP" \
+  || fail "WSA delta application must reject frame data larger than the delta buffer"
+
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 "${CXX:-c++}" -std=gnu++98 -I"$ROOT_DIR/PORT/MAC/include" "$ROOT_DIR/tests/ddraw_shim_test.cpp" -o "$tmpdir/ddraw_shim_test"
