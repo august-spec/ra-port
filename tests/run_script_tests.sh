@@ -46,6 +46,8 @@ assert_executable scripts/prepare_assets_from_local.sh
 assert_executable scripts/smoke_mac_menu.sh
 assert_executable scripts/build_android_debug.sh
 assert_executable scripts/run_android_debug.sh
+assert_executable scripts/build_ios_debug.sh
+assert_executable scripts/run_ios_simulator.sh
 
 legacy_stage_arg="--staging-""dir"
 legacy_tmp_dir="/tmp/redalert_""mac_run"
@@ -67,6 +69,13 @@ assert_help_not_contains scripts/smoke_mac_menu.sh "$legacy_stage_arg"
 assert_help_contains scripts/build_android_debug.sh "assembleDebug"
 assert_help_contains scripts/run_android_debug.sh "adb"
 assert_help_contains scripts/run_android_debug.sh "--fresh-install"
+assert_help_contains scripts/build_ios_debug.sh "iphonesimulator"
+assert_help_contains scripts/build_ios_debug.sh "iphoneos"
+assert_help_contains scripts/build_ios_debug.sh "RA_IOS_DEVELOPMENT_TEAM"
+assert_help_contains scripts/run_ios_simulator.sh "simctl"
+assert_help_contains scripts/run_ios_simulator.sh "--no-build"
+assert_help_contains scripts/run_ios_simulator.sh "--device"
+assert_help_contains scripts/run_ios_simulator.sh "--no-landscape"
 
 assert_file_not_contains scripts/run_mac_dev.sh "$legacy_tmp_dir"
 assert_file_not_contains scripts/run_mac_dev.sh "$legacy_stage_var"
@@ -81,6 +90,7 @@ assert_file_contains android/build.gradle.kts "com.android.application"
 assert_file_contains android/app/build.gradle.kts "assembleDebug"
 assert_file_contains android/app/build.gradle.kts "28.2.13676358"
 assert_file_contains android/app/CMakeLists.txt "redalert_android"
+assert_file_contains android/app/CMakeLists.txt "RA_MOBILE_TOUCH"
 assert_file_contains android/app/src/main/AndroidManifest.xml "landscape"
 assert_file_contains android/app/src/main/AndroidManifest.xml "appCategory=\"game\""
 assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "SDLActivity"
@@ -99,22 +109,85 @@ assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActiv
 assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars()"
 assert_file_contains android/app/src/main/java/com/raport/redalert/RedAlertActivity.java "SYSTEM_UI_FLAG_IMMERSIVE_STICKY"
 assert_file_contains PORT/ANDROID/src/android_main.cpp "SDL_main"
+assert_file_contains PORT/IOS/src/ios_main.cpp "SDL_main"
+assert_file_contains PORT/IOS/src/ios_main.cpp "SDL_GetPrefPath"
+assert_file_contains PORT/IOS/src/ios_main.cpp "SDL_GetBasePath"
+assert_file_contains PORT/IOS/src/ios_main.cpp "copy_directory_recursive"
+assert_file_contains PORT/IOS/src/ios_main.cpp "redalert-root"
+assert_file_contains PORT/IOS/src/ios_app_delegate.m "RedAlertIOSDelegate"
+assert_file_contains PORT/IOS/src/ios_app_delegate.m "UIInterfaceOrientationMaskLandscape"
+assert_file_contains PORT/IOS/src/ios_app_delegate.m "getAppDelegateClassName"
+assert_file_contains PORT/IOS/src/ios_app_delegate.m "class_replaceMethod"
+assert_file_contains PORT/IOS/src/ios_app_delegate.m "UIWindowSceneGeometryPreferencesIOS"
+assert_file_contains PORT/IOS/src/ios_app_delegate.m "requestGeometryUpdateWithPreferences"
+assert_file_contains ios/CMakeLists.txt "redalert_ios"
+assert_file_contains ios/CMakeLists.txt "MACOSX_BUNDLE"
+assert_file_contains ios/CMakeLists.txt "ios_app_delegate.m"
+assert_file_contains ios/CMakeLists.txt "SDL2::SDL2main"
+assert_file_contains ios/CMakeLists.txt "RA_IOS"
+assert_file_contains ios/CMakeLists.txt "RA_MOBILE_TOUCH"
+assert_file_contains ios/CMakeLists.txt "copy_directory"
+assert_file_contains ios/Info.plist.in "UIApplicationSupportsIndirectInputEvents"
+assert_file_contains ios/Info.plist.in "UIInterfaceOrientationLandscapeLeft"
+assert_file_contains ios/Info.plist.in "UIInterfaceOrientationLandscapeRight"
+assert_file_contains scripts/build_ios_debug.sh 'SDL_VERSION="2.32.10"'
+assert_file_contains scripts/build_ios_debug.sh "-DCMAKE_SYSTEM_NAME=iOS"
+assert_file_contains scripts/build_ios_debug.sh "iphonesimulator"
+assert_file_contains scripts/build_ios_debug.sh "iphoneos"
+assert_file_contains scripts/build_ios_debug.sh "CODE_SIGNING_ALLOWED=NO"
+assert_file_contains scripts/build_ios_debug.sh "ensure_xcode_developer_dir"
+assert_file_contains scripts/build_ios_debug.sh "DEVELOPER_DIR"
+perl -0ne 'exit(/configure_project\(\)[\s\S]*local cmake_args=\([\s\S]*if \(\(\$\{#CMAKE_ARGS\[@\]\}\)\); then[\s\S]*cmake_args\+=\("\$\{CMAKE_ARGS\[@\]\}"\)[\s\S]*"\$\{cmake_args\[@\]\}"/s ? 0 : 1)' "$ROOT_DIR/scripts/build_ios_debug.sh" \
+  || fail "iOS build script must avoid expanding an empty CMAKE_ARGS array under macOS bash nounset"
+assert_file_contains scripts/run_ios_simulator.sh "bootstatus"
+assert_file_contains scripts/run_ios_simulator.sh 'install "$SIMULATOR_UDID"'
+assert_file_contains scripts/run_ios_simulator.sh 'launch "$SIMULATOR_UDID"'
+assert_file_contains scripts/run_ios_simulator.sh "CurrentDeviceUDID"
+assert_file_contains scripts/run_ios_simulator.sh "Landscape Right"
+assert_file_contains scripts/run_ios_simulator.sh "prefer iPads"
+assert_file_contains scripts/run_ios_simulator.sh "ensure_xcode_developer_dir"
+assert_file_contains scripts/run_ios_simulator.sh "DEVELOPER_DIR"
+perl -0ne 'exit(/run_build\(\)[\s\S]*local build_args=\([\s\S]*if \(\(\$\{#BUILD_ARGS\[@\]\}\)\); then[\s\S]*build_args\+=\("\$\{BUILD_ARGS\[@\]\}"\)[\s\S]*"\$\{build_args\[@\]\}"/s ? 0 : 1)' "$ROOT_DIR/scripts/run_ios_simulator.sh" \
+  || fail "iOS simulator script must avoid expanding an empty BUILD_ARGS array under macOS bash nounset"
 assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "SDL_FINGERDOWN"
 assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "SDL_MULTIGESTURE"
+assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "RA_MOBILE_TOUCH"
+assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "MobileTouchGesture"
 assert_file_not_contains PORT/MAC/src/mac_sdl_runtime.cpp "SDL_CreateRenderer(MacWindow, -1, SDL_RENDERER_SOFTWARE);"
 assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "SDL_RENDERER_ACCELERATED"
-assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "mac_android_idle_delay"
+assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "mobile_idle_delay"
 assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "SDL_Delay(1)"
+assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "SDL_HINT_IOS_HIDE_HOME_INDICATOR"
+assert_file_contains PORT/MAC/src/mac_sdl_runtime.cpp "SDL_HINT_ORIENTATIONS"
 assert_file_not_contains PORT/MAC/src/mac_sdl_runtime.cpp "RA_PERF"
-assert_file_contains CODE/TAB.CPP "Android touch taps can land on the exact top row"
+assert_file_not_contains PORT/MAC/src/mac_sdl_runtime.cpp "AndroidTouchGesture"
+assert_file_not_contains PORT/MAC/src/mac_sdl_runtime.cpp "#if defined(__ANDROID__)"
+assert_file_contains CODE/TAB.CPP "Mobile touch taps can land on the exact top row"
+assert_file_contains CODE/DISPLAY.CPP "RA_MOBILE_TOUCH"
+assert_file_contains WIN32LIB/KEYBOARD/MOUSE.CPP "RA_MOBILE_TOUCH"
 assert_file_contains WIN32LIB/KEYBOARD/MOUSE.CPP "mac_sdl_runtime.h"
 assert_file_contains WIN32LIB/KEYBOARD/MOUSE.CPP "MacSDL_TouchCursorHidden()"
+assert_file_not_contains CODE/DISPLAY.CPP "#if defined(__ANDROID__)"
+assert_file_not_contains CODE/TAB.CPP "#if defined(__ANDROID__)"
+assert_file_not_contains WIN32LIB/KEYBOARD/MOUSE.CPP "#if defined(__ANDROID__)"
 
 perl -0ne 'exit(/static void mac_queue_mouse_button_with_cursor\([^\)]*\)\s*\{\s*MacMousePoint\.x\s*=\s*x;\s*MacMousePoint\.y\s*=\s*y;[\s\S]*?if \(update_cursor\)/s ? 0 : 1)' "$ROOT_DIR/PORT/MAC/src/mac_sdl_runtime.cpp" \
   || fail "Android tap button events must update the legacy cursor position even when the touch cursor stays hidden"
 
-perl -0ne 'exit(/void TabClass::AI\(KeyNumType &input, int x, int y\)[\s\S]*#if defined\(__ANDROID__\)[\s\S]*bool y_ok = y >= 0;[\s\S]*#else[\s\S]*bool y_ok = y > 0;[\s\S]*#endif/s ? 0 : 1)' "$ROOT_DIR/CODE/TAB.CPP" \
-  || fail "Android top tab clicks must accept the exact top row without changing desktop edge behavior"
+perl -0ne 'exit(/Uint32 window_flags = SDL_WINDOW_SHOWN \| SDL_WINDOW_RESIZABLE;[\s\S]*#if defined\(RA_MOBILE_TOUCH\)[\s\S]*window_flags \|= SDL_WINDOW_BORDERLESS;[\s\S]*#endif/s ? 0 : 1)' "$ROOT_DIR/PORT/MAC/src/mac_sdl_runtime.cpp" \
+  || fail "mobile SDL windows must be borderless so iOS hides system chrome"
+
+perl -0ne 'exit(/#if defined\(RA_IOS\)[\s\S]*SDL_SetHint\(SDL_HINT_ORIENTATIONS,\s*"LandscapeLeft LandscapeRight"\);[\s\S]*SDL_SetHint\(SDL_HINT_IOS_HIDE_HOME_INDICATOR,\s*"1"\);[\s\S]*#endif/s ? 0 : 1)' "$ROOT_DIR/PORT/MAC/src/mac_sdl_runtime.cpp" \
+  || fail "iOS SDL windows must restrict UIKit/SDL orientation masks to landscape"
+
+perl -0ne 'exit(/Uint32 window_flags = SDL_WINDOW_SHOWN \| SDL_WINDOW_RESIZABLE;[\s\S]*#if defined\(RA_IOS\)[\s\S]*window_flags &= ~SDL_WINDOW_RESIZABLE;[\s\S]*#endif/s ? 0 : 1)' "$ROOT_DIR/PORT/MAC/src/mac_sdl_runtime.cpp" \
+  || fail "iOS SDL windows must not opt into resizable portrait-capable scenes"
+
+perl -0ne 'exit(/#if defined\(RA_IOS\)[\s\S]*flags = TPF_USE_GRAD_PAL;[\s\S]*#else[\s\S]*flags = TPF_USE_GRAD_PAL\|TPF_MEDIUM_COLOR;[\s\S]*#endif/s ? 0 : 1)' "$ROOT_DIR/CODE/TEXTBTN.CPP" \
+  || fail "iOS unselected text buttons must keep gradient text visible instead of flattening into the button face"
+
+perl -0ne 'exit(/void TabClass::AI\(KeyNumType &input, int x, int y\)[\s\S]*#if defined\(RA_MOBILE_TOUCH\)[\s\S]*bool y_ok = y >= 0;[\s\S]*#else[\s\S]*bool y_ok = y > 0;[\s\S]*#endif/s ? 0 : 1)' "$ROOT_DIR/CODE/TAB.CPP" \
+  || fail "mobile top tab clicks must accept the exact top row without changing desktop edge behavior"
 
 perl -0ne 'exit(/void WWMouseClass::Low_Show_Mouse\(int x, int y\)[\s\S]*MacSDL_TouchCursorHidden\(\)[\s\S]*MouseBuffX\s*=\s*-1[\s\S]*MouseBuffY\s*=\s*-1[\s\S]*return/s ? 0 : 1)' "$ROOT_DIR/WIN32LIB/KEYBOARD/MOUSE.CPP" \
   || fail "Android touch-hidden mode must suppress low-level software cursor drawing without leaving stale mouse backing coordinates"
@@ -140,8 +213,11 @@ for ignored_runtime_file in \
   "*.pcx" \
   "*.LOG" \
   "*.log"; do
-  assert_file_contains .gitignore "$ignored_runtime_file"
+assert_file_contains .gitignore "$ignored_runtime_file"
 done
+
+assert_file_contains .gitignore "ios/build*/"
+assert_file_contains .gitignore "ios/third_party/"
 
 legacy_script="fetch_base_""assets.sh"
 legacy_allies="RA_""Allies"
@@ -273,8 +349,8 @@ trap 'rm -rf "$tmpdir"' EXIT
 "$tmpdir/aspect_viewport_test"
 
 "${CXX:-c++}" -std=gnu++98 -I"$ROOT_DIR/PORT/MAC/include" \
-  "$ROOT_DIR/tests/android_touch_gesture_test.cpp" -o "$tmpdir/android_touch_gesture_test"
-"$tmpdir/android_touch_gesture_test"
+  "$ROOT_DIR/tests/mobile_touch_gesture_test.cpp" -o "$tmpdir/mobile_touch_gesture_test"
+"$tmpdir/mobile_touch_gesture_test"
 
 "${CXX:-c++}" -std=gnu++98 -DTRUE_FALSE_DEFINED -I"$ROOT_DIR/PORT/MAC/include" -I"$ROOT_DIR/WIN32LIB/SHAPE" -I"$ROOT_DIR/WIN32LIB/INCLUDE" \
   "$ROOT_DIR/tests/shape_extract_test.cpp" "$ROOT_DIR/WIN32LIB/SHAPE/GETSHAPE.CPP" -o "$tmpdir/shape_extract_test"

@@ -1,15 +1,16 @@
 # ra-port
 
-**Native macOS and Android source port of Command & Conquer: Red Alert.**
+**Native macOS, Android, and iOS source port of Command & Conquer: Red Alert.**
 
 [![macOS](https://img.shields.io/badge/macOS-native-111111?logo=apple&logoColor=white)](#quick-start)
 [![Android](https://img.shields.io/badge/Android-debug%20APK-3ddc84?logo=android&logoColor=white)](#android-debug-apk)
+[![iOS](https://img.shields.io/badge/iOS-debug%20app-111111?logo=apple&logoColor=white)](#ios-debug-app)
 [![Build](https://img.shields.io/badge/build-CMake%20%2B%20Ninja-064f8c)](#build-from-source)
 [![Runtime](https://img.shields.io/badge/runtime-SDL2-cc3333)](#current-status)
 [![Source-only](https://img.shields.io/badge/source--only-no%20game%20data-lightgrey)](#game-data)
 [![License](https://img.shields.io/badge/license-GPLv3%20with%20additional%20terms-blue)](#license-and-notice)
 
-`ra-port` lets you play Red Alert (1996) on modern platforms. It currently runs as a native macOS executable and as a local Android debug APK, with SDL2 providing the platform layer.
+`ra-port` lets you play Red Alert (1996) on modern platforms. It currently runs as a native macOS executable, a local Android debug APK, and an iOS debug app, with SDL2 providing the platform layer.
 
 ![Red Alert running natively in a macOS window](docs/images/ra-port-macos-window.png)
 
@@ -17,7 +18,7 @@ The repository contains only source code and build tooling. No game assets are i
 
 ## Why This Exists
 
-Red Alert was released for a very different desktop world. This project keeps the original code recognizable while supporting macOS and Android.
+Red Alert was released for a very different desktop world. This project keeps the original code recognizable while supporting macOS, Android, and iOS.
 
 This is an unofficial source port based on the source code Electronic Arts released under GPLv3 with additional terms: <https://github.com/electronicarts/CnC_Red_Alert>.
 
@@ -27,15 +28,17 @@ This is an unofficial source port based on the source code Electronic Arts relea
 | --- | --- | --- |
 | :white_check_mark: | macOS on Apple Silicon | Builds and runs with CMake/Ninja. |
 | :white_check_mark: | Android debug APK | Builds a local landscape APK for arm64-v8a devices and emulators. |
+| :white_check_mark: | iOS debug app | Builds a landscape simulator/device app with CMake/Xcode. |
 | :white_check_mark: | Campaign | Allied and Soviet campaigns are fully working. |
 | :white_check_mark: | Skirmish | Local skirmish is fully working. |
 | :white_check_mark: | Videos | Videos are playing with sound. |
-| :white_check_mark: | Controls and audio | macOS keyboard/mouse and Android touch/audio work. |
+| :white_check_mark: | Controls and audio | macOS keyboard/mouse plus Android and iOS touch/audio work. |
 | :x: | Online/network multiplayer | Not wired up yet. |
 | :x: | Launcher/setup tools | Not ported. |
 | :x: | Expansion packs | Not a focus yet. |
 | :x: | `.app` bundle | Not packaged yet; the build creates a normal macOS executable. |
 | :x: | Android release build | Only local debug APKs are supported right now. |
+| :x: | iOS release build | Only local debug simulator/device builds are supported right now. |
 
 ## Quick Start
 
@@ -74,6 +77,13 @@ scripts/build_android_debug.sh
 scripts/run_android_debug.sh --no-build
 ```
 
+To build and run the iOS simulator debug app, install full Xcode, keep the same prepared local game data under `assets/redalert`, then run:
+
+```sh
+scripts/build_ios_debug.sh
+scripts/run_ios_simulator.sh --no-build
+```
+
 ## Game Data
 
 The repository contains only source code and build tooling. It does not contain game data, movies, music, disc images, archives, installers, generated palettes, or packaged executables.
@@ -85,7 +95,7 @@ The asset preparation script copies from local paths that you provide:
 
 Those directories are ignored by git. They should contain original disc-root style files such as `INSTALL/REDALERT.INI` and the base-game `.MIX` files.
 
-The Android debug build uses the same ignored `assets/redalert` tree. Gradle copies those local files into generated debug assets while building the APK; they are not checked in and they are not used for a release build.
+The Android and iOS debug builds use the same ignored `assets/redalert` tree. Gradle copies those local files into generated Android debug assets, and the iOS CMake target copies them into the debug app bundle. They are not checked in and they are not used for release packaging.
 
 ## Build From Source
 
@@ -187,6 +197,42 @@ adb shell am start -n com.raport.redalert/.RedAlertActivity
 
 The debug APK intentionally includes your local ignored game data so the app can run on the device without external storage setup. Do not distribute that APK.
 
+## iOS Debug App
+
+The iOS target is for local development and testing only. It builds a landscape app for the iOS simulator by default, or for a signed arm64 device build when you provide an Apple development team.
+
+Install iOS tooling:
+
+- Full Xcode, not only Command Line Tools
+- CMake
+- Local Red Alert assets prepared under `assets/redalert`
+
+Build the simulator app:
+
+```sh
+scripts/build_ios_debug.sh
+```
+
+The first build downloads SDL2 sources into ignored local storage under `ios/third_party/`. The app is written under:
+
+```text
+ios/build-simulator/Debug-iphonesimulator/redalert_ios.app
+```
+
+Install and launch on the booted iOS simulator:
+
+```sh
+scripts/run_ios_simulator.sh --no-build
+```
+
+Build for a connected iPhone or iPad:
+
+```sh
+RA_IOS_DEVELOPMENT_TEAM=TEAMID scripts/build_ios_debug.sh --device
+```
+
+The debug iOS app intentionally includes your local ignored game data. On first launch it copies that bundled data into app-writable storage before starting the game, so saves and options can be written inside the iOS sandbox. Do not distribute that app bundle.
+
 ## Fullscreen
 
 Start fullscreen:
@@ -224,7 +270,9 @@ tests/run_script_tests.sh
 | `CODE/` | Main Red Alert game code |
 | `PORT/MAC/` | macOS runtime, compatibility shims, SDL2 integration |
 | `PORT/ANDROID/` | Android entrypoint and platform-specific resource setup |
+| `PORT/IOS/` | iOS entrypoint and writable sandbox resource setup |
 | `android/` | Gradle Android app that builds the debug APK |
+| `ios/` | CMake/Xcode iOS app target |
 | `WIN32LIB/`, `WINVQ/` | Legacy support libraries used by the port |
 | `scripts/` | Asset preparation, run helpers, smoke capture |
 | `tests/` | Focused source-level and shim tests |

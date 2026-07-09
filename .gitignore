@@ -12,6 +12,9 @@ android/app/build/
 android/local.properties
 android/third_party/
 
+ios/build*/
+ios/third_party/
+
 assets/
 
 # Runtime files written when running from the repository root.

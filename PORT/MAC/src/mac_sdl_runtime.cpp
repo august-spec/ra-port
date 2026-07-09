@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "../include/mac_sdl_runtime.h"
-#include "android_touch_gesture.h"
+#include "mobile_touch_gesture.h"
 #include "ra_aspect_viewport.h"
 #include <mmsystem.h>
 
@@ -29,11 +29,11 @@ static unsigned char MacKeyState[256];
 static unsigned char MacToggleState[256];
 static POINT MacMousePoint = {0, 0};
 
-#if defined(__ANDROID__)
-static AndroidTouchGesture AndroidTouch;
-static float AndroidPanAccumulatorX = 0.0f;
-static float AndroidPanAccumulatorY = 0.0f;
-static bool AndroidTouchCursorHidden = true;
+#if defined(RA_MOBILE_TOUCH)
+static MobileTouchGesture MobileTouch;
+static float MobilePanAccumulatorX = 0.0f;
+static float MobilePanAccumulatorY = 0.0f;
+static bool MobileTouchCursorHidden = true;
 #endif
 
 LRESULT FAR PASCAL _export Windows_Procedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -119,8 +119,8 @@ static BOOL mac_queue_message(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpa
 
 static void mac_queue_mouse_motion(int x, int y)
 {
-#if defined(__ANDROID__)
-	AndroidTouchCursorHidden = false;
+#if defined(RA_MOBILE_TOUCH)
+	MobileTouchCursorHidden = false;
 #endif
 	MacMousePoint.x = x;
 	MacMousePoint.y = y;
@@ -132,8 +132,8 @@ static void mac_queue_mouse_button_with_cursor(int vk, bool down, int x, int y, 
 	MacMousePoint.x = x;
 	MacMousePoint.y = y;
 	if (update_cursor) {
-#if defined(__ANDROID__)
-		AndroidTouchCursorHidden = false;
+#if defined(RA_MOBILE_TOUCH)
+		MobileTouchCursorHidden = false;
 #endif
 	}
 	MacKeyState[vk & 0xFF] = down ? 1 : 0;
@@ -144,9 +144,9 @@ static void mac_queue_mouse_button_with_cursor(int vk, bool down, int x, int y, 
 		message = down ? WM_MBUTTONDOWN : WM_MBUTTONUP;
 	}
 	mac_queue_message((HWND)(intptr_t)1, message, (WPARAM)vk, mac_pack_xy(x, y));
-#if defined(__ANDROID__)
+#if defined(RA_MOBILE_TOUCH)
 	if (!update_cursor && !down) {
-		AndroidTouchCursorHidden = true;
+		MobileTouchCursorHidden = true;
 	}
 #endif
 }
@@ -183,8 +183,8 @@ static bool mac_has_pending_messages(void)
 	return MacMessageHead != MacMessageTail;
 }
 
-#if defined(__ANDROID__)
-static void mac_android_idle_delay(bool allow_idle_delay, bool saw_sdl_event)
+#if defined(RA_MOBILE_TOUCH)
+static void mobile_idle_delay(bool allow_idle_delay, bool saw_sdl_event)
 {
 	if (allow_idle_delay && !saw_sdl_event && !mac_has_pending_messages()) {
 		SDL_Delay(1);
@@ -358,8 +358,8 @@ static int mac_vk_from_button(unsigned char button)
 	}
 }
 
-#if defined(__ANDROID__)
-static bool android_logical_point(float normalized_x, float normalized_y, int *logical_x, int *logical_y)
+#if defined(RA_MOBILE_TOUCH)
+static bool mobile_logical_point(float normalized_x, float normalized_y, int *logical_x, int *logical_y)
 {
 	if (!MacWindow || MacWidth <= 0 || MacHeight <= 0) {
 		if (logical_x) *logical_x = 0;
@@ -385,62 +385,62 @@ static bool android_logical_point(float normalized_x, float normalized_y, int *l
 	return RA_MapViewportPoint(viewport, MacWidth, MacHeight, screen_x, screen_y, logical_x, logical_y) != 0;
 }
 
-static void android_emit_pan(float dx, float dy)
+static void mobile_emit_pan(float dx, float dy)
 {
 	static const float threshold = 24.0f;
-	AndroidPanAccumulatorX += dx * (float)MacWidth;
-	AndroidPanAccumulatorY += dy * (float)MacHeight;
+	MobilePanAccumulatorX += dx * (float)MacWidth;
+	MobilePanAccumulatorY += dy * (float)MacHeight;
 
-	while (AndroidPanAccumulatorX >= threshold) {
+	while (MobilePanAccumulatorX >= threshold) {
 		mac_queue_key_pulse(VK_LEFT);
-		AndroidPanAccumulatorX -= threshold;
+		MobilePanAccumulatorX -= threshold;
 	}
-	while (AndroidPanAccumulatorX <= -threshold) {
+	while (MobilePanAccumulatorX <= -threshold) {
 		mac_queue_key_pulse(VK_RIGHT);
-		AndroidPanAccumulatorX += threshold;
+		MobilePanAccumulatorX += threshold;
 	}
-	while (AndroidPanAccumulatorY >= threshold) {
+	while (MobilePanAccumulatorY >= threshold) {
 		mac_queue_key_pulse(VK_UP);
-		AndroidPanAccumulatorY -= threshold;
+		MobilePanAccumulatorY -= threshold;
 	}
-	while (AndroidPanAccumulatorY <= -threshold) {
+	while (MobilePanAccumulatorY <= -threshold) {
 		mac_queue_key_pulse(VK_DOWN);
-		AndroidPanAccumulatorY += threshold;
+		MobilePanAccumulatorY += threshold;
 	}
 }
 
-static void android_queue_touch_output(AndroidTouchGestureOutput const *out)
+static void mobile_queue_touch_output(MobileTouchGestureOutput const *out)
 {
 	if (!out) {
 		return;
 	}
 	for (int index = 0; index < out->count; ++index) {
-		AndroidTouchGestureEvent const *touch_event = &out->events[index];
+		MobileTouchGestureEvent const *touch_event = &out->events[index];
 		switch (touch_event->type) {
-			case ANDROID_TOUCH_MOUSE_MOVE:
+			case MOBILE_TOUCH_MOUSE_MOVE:
 				mac_queue_mouse_motion(touch_event->x, touch_event->y);
 				break;
-			case ANDROID_TOUCH_LEFT_DOWN:
+			case MOBILE_TOUCH_LEFT_DOWN:
 				mac_queue_mouse_button_with_cursor(VK_LBUTTON, true, touch_event->x, touch_event->y, touch_event->update_cursor != 0);
 				break;
-			case ANDROID_TOUCH_LEFT_UP:
+			case MOBILE_TOUCH_LEFT_UP:
 				mac_queue_mouse_button_with_cursor(VK_LBUTTON, false, touch_event->x, touch_event->y, touch_event->update_cursor != 0);
 				break;
-			case ANDROID_TOUCH_RIGHT_DOWN:
+			case MOBILE_TOUCH_RIGHT_DOWN:
 				mac_queue_mouse_button_with_cursor(VK_RBUTTON, true, touch_event->x, touch_event->y, touch_event->update_cursor != 0);
 				break;
-			case ANDROID_TOUCH_RIGHT_UP:
+			case MOBILE_TOUCH_RIGHT_UP:
 				mac_queue_mouse_button_with_cursor(VK_RBUTTON, false, touch_event->x, touch_event->y, touch_event->update_cursor != 0);
 				break;
 		}
 	}
 }
 
-static void android_maybe_send_long_press(void)
+static void mobile_maybe_send_long_press(void)
 {
-	AndroidTouchGestureOutput out;
-	AndroidTouchGesture_Update(&AndroidTouch, mac_now_ms(), &out);
-	android_queue_touch_output(&out);
+	MobileTouchGestureOutput out;
+	MobileTouchGesture_Update(&MobileTouch, mac_now_ms(), &out);
+	mobile_queue_touch_output(&out);
 }
 #endif
 
@@ -486,14 +486,18 @@ bool MacSDL_SetMode(int width, int height)
 
 	if (!MacSDLReady) {
 		SDL_SetMainReady();
-#if defined(__ANDROID__)
+#if defined(RA_MOBILE_TOUCH)
 		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2");
 		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 #else
 		SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 #endif
 		SDL_SetHint(SDL_HINT_RENDER_LOGICAL_SIZE_MODE, "letterbox");
-#if defined(__ANDROID__)
+#if defined(RA_IOS)
+		SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+		SDL_SetHint(SDL_HINT_IOS_HIDE_HOME_INDICATOR, "1");
+#endif
+#if defined(RA_MOBILE_TOUCH)
 		SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
 		SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
 #endif
@@ -504,8 +508,8 @@ bool MacSDL_SetMode(int width, int height)
 		MacMainThread = SDL_ThreadID();
 		mac_update_modifier_state();
 		mac_default_palette();
-#if defined(__ANDROID__)
-		AndroidTouchGesture_Init(&AndroidTouch);
+#if defined(RA_MOBILE_TOUCH)
+		MobileTouchGesture_Init(&MobileTouch);
 #endif
 	}
 
@@ -524,6 +528,12 @@ bool MacSDL_SetMode(int width, int height)
 		MacFullscreen = true;
 	}
 	Uint32 window_flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+#if defined(RA_MOBILE_TOUCH)
+	window_flags |= SDL_WINDOW_BORDERLESS;
+#endif
+#if defined(RA_IOS)
+	window_flags &= ~SDL_WINDOW_RESIZABLE;
+#endif
 	if (MacFullscreen) {
 		window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 	}
@@ -533,7 +543,7 @@ bool MacSDL_SetMode(int width, int height)
 	}
 
 	Uint32 renderer_flags = SDL_RENDERER_SOFTWARE;
-#if defined(__ANDROID__)
+#if defined(RA_MOBILE_TOUCH)
 	renderer_flags = SDL_RENDERER_ACCELERATED;
 #endif
 	MacRenderer = SDL_CreateRenderer(MacWindow, -1, renderer_flags);
@@ -588,8 +598,8 @@ static void mac_sdl_pump_events(bool allow_idle_delay)
 		return;
 	}
 	MacMM_PumpTimers();
-#if defined(__ANDROID__)
-	android_maybe_send_long_press();
+#if defined(RA_MOBILE_TOUCH)
+	mobile_maybe_send_long_press();
 #endif
 	SDL_Event event;
 	bool saw_sdl_event = false;
@@ -622,50 +632,50 @@ static void mac_sdl_pump_events(bool allow_idle_delay)
 				break;
 			}
 
-#if defined(__ANDROID__)
+#if defined(RA_MOBILE_TOUCH)
 			case SDL_FINGERDOWN: {
 				int x = 0;
 				int y = 0;
-				if (!android_logical_point(event.tfinger.x, event.tfinger.y, &x, &y)) {
+				if (!mobile_logical_point(event.tfinger.x, event.tfinger.y, &x, &y)) {
 					break;
 				}
-				AndroidTouchGestureOutput out;
-				AndroidTouchGesture_Begin(&AndroidTouch, (long long)event.tfinger.fingerId, x, y, mac_now_ms(), &out);
-				if (AndroidTouch.secondary_active && AndroidTouch.secondary_finger == (long long)event.tfinger.fingerId) {
-					AndroidPanAccumulatorX = 0.0f;
-					AndroidPanAccumulatorY = 0.0f;
+				MobileTouchGestureOutput out;
+				MobileTouchGesture_Begin(&MobileTouch, (long long)event.tfinger.fingerId, x, y, mac_now_ms(), &out);
+				if (MobileTouch.secondary_active && MobileTouch.secondary_finger == (long long)event.tfinger.fingerId) {
+					MobilePanAccumulatorX = 0.0f;
+					MobilePanAccumulatorY = 0.0f;
 				}
-				android_queue_touch_output(&out);
+				mobile_queue_touch_output(&out);
 				break;
 			}
 
 			case SDL_FINGERMOTION: {
 				int x = 0;
 				int y = 0;
-				android_logical_point(event.tfinger.x, event.tfinger.y, &x, &y);
-				if (AndroidTouchGesture_IsPanFinger(&AndroidTouch, (long long)event.tfinger.fingerId)) {
-					android_emit_pan(event.tfinger.dx, event.tfinger.dy);
+				mobile_logical_point(event.tfinger.x, event.tfinger.y, &x, &y);
+				if (MobileTouchGesture_IsPanFinger(&MobileTouch, (long long)event.tfinger.fingerId)) {
+					mobile_emit_pan(event.tfinger.dx, event.tfinger.dy);
 					break;
 				}
-				AndroidTouchGestureOutput out;
-				AndroidTouchGesture_Move(&AndroidTouch, (long long)event.tfinger.fingerId, x, y, &out);
-				android_queue_touch_output(&out);
+				MobileTouchGestureOutput out;
+				MobileTouchGesture_Move(&MobileTouch, (long long)event.tfinger.fingerId, x, y, &out);
+				mobile_queue_touch_output(&out);
 				break;
 			}
 
 			case SDL_FINGERUP: {
 				int x = 0;
 				int y = 0;
-				android_logical_point(event.tfinger.x, event.tfinger.y, &x, &y);
-				AndroidTouchGestureOutput out;
-				AndroidTouchGesture_End(&AndroidTouch, (long long)event.tfinger.fingerId, x, y, &out);
-				android_queue_touch_output(&out);
+				mobile_logical_point(event.tfinger.x, event.tfinger.y, &x, &y);
+				MobileTouchGestureOutput out;
+				MobileTouchGesture_End(&MobileTouch, (long long)event.tfinger.fingerId, x, y, &out);
+				mobile_queue_touch_output(&out);
 				break;
 			}
 
 			case SDL_MULTIGESTURE:
-				if (AndroidTouch.secondary_active) {
-					android_emit_pan(event.mgesture.x, event.mgesture.y);
+				if (MobileTouch.secondary_active) {
+					mobile_emit_pan(event.mgesture.x, event.mgesture.y);
 				}
 				break;
 #endif
@@ -692,8 +702,8 @@ static void mac_sdl_pump_events(bool allow_idle_delay)
 				break;
 		}
 	}
-#if defined(__ANDROID__)
-	mac_android_idle_delay(allow_idle_delay, saw_sdl_event);
+#if defined(RA_MOBILE_TOUCH)
+	mobile_idle_delay(allow_idle_delay, saw_sdl_event);
 #endif
 }
 
@@ -709,8 +719,8 @@ bool MacSDL_QuitRequested(void)
 
 bool MacSDL_TouchCursorHidden(void)
 {
-#if defined(__ANDROID__)
-	return AndroidTouchCursorHidden;
+#if defined(RA_MOBILE_TOUCH)
+	return MobileTouchCursorHidden;
 #else
 	return false;
 #endif

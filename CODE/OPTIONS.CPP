@@ -106,7 +106,7 @@ OptionsClass::OptionsClass(void) :
 	KeyTeam9(KN_9),
 	KeyTeam10(KN_0)
 {
-#ifdef __ANDROID__
+#if defined(RA_MOBILE_TOUCH)
 	KeySidebarUp = KN_NONE;
 	KeySidebarDown = KN_NONE;
 	KeyScrollLeft = KN_LEFT;

@@ -28,6 +28,7 @@ ra95_configure_target(redalert_android)
 target_compile_definitions(redalert_android PRIVATE
     ANDROID
     RA_ANDROID
+    RA_MOBILE_TOUCH
 )
 
 if(TARGET SDL2::SDL2)

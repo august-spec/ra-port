@@ -305,7 +305,11 @@ void TextButtonClass::Draw_Text(char const * text)
 			if (IsPressed || IsOn) {
 				flags = TPF_USE_GRAD_PAL|TPF_BRIGHT_COLOR;
 			} else {
+#if defined(RA_IOS)
+				flags = TPF_USE_GRAD_PAL;
+#else
 				flags = TPF_USE_GRAD_PAL|TPF_MEDIUM_COLOR;
+#endif
 			}
 		}
 

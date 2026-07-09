@@ -54,20 +54,20 @@ static int const TEX_X = 0;
 static int const TEX_Y = 6;
 static int const TEX_W = 14;
 
-#if defined(__ANDROID__)
-static bool AndroidTouchMouseHidden = false;
+#if defined(RA_MOBILE_TOUCH)
+static bool MobileTouchMouseHidden = false;
 
-static void Android_Set_Touch_Mouse_Hidden(bool hidden)
+static void Mobile_Set_Touch_Mouse_Hidden(bool hidden)
 {
 	if (hidden) {
 		if (Get_Mouse_State() == 0) {
 			Hide_Mouse();
-			AndroidTouchMouseHidden = true;
+			MobileTouchMouseHidden = true;
 		}
 	} else {
-		if (AndroidTouchMouseHidden) {
+		if (MobileTouchMouseHidden) {
 			Show_Mouse();
-			AndroidTouchMouseHidden = false;
+			MobileTouchMouseHidden = false;
 		}
 	}
 }
@@ -2727,10 +2727,10 @@ void DisplayClass::Refresh_Band(void)
  *=============================================================================================*/
 int DisplayClass::TacticalClass::Action(unsigned flags, KeyNumType & key)
 {
-#if defined(__ANDROID__)
+#if defined(RA_MOBILE_TOUCH)
 	bool touch_cursor_hidden = MacSDL_TouchCursorHidden();
 	if (touch_cursor_hidden && !(flags & (LEFTPRESS|LEFTRELEASE|RIGHTPRESS|RIGHTRELEASE|LEFTHELD))) {
-		Android_Set_Touch_Mouse_Hidden(true);
+		Mobile_Set_Touch_Mouse_Hidden(true);
 		if (Map.ZoneCell != -1) {
 			Map.Set_Cursor_Pos(-1);
 		}
@@ -2738,7 +2738,7 @@ int DisplayClass::TacticalClass::Action(unsigned flags, KeyNumType & key)
 		return(GadgetClass::Action(0, key));
 	}
 	if (!touch_cursor_hidden) {
-		Android_Set_Touch_Mouse_Hidden(false);
+		Mobile_Set_Touch_Mouse_Hidden(false);
 	}
 #endif
 
@@ -3588,9 +3588,9 @@ void DisplayClass::Mouse_Left_Release(CELL cell, int x, int y, ObjectClass * obj
 		}
 	}
 
-#if defined(__ANDROID__)
+#if defined(RA_MOBILE_TOUCH)
 	if (MacSDL_TouchCursorHidden()) {
-		Android_Set_Touch_Mouse_Hidden(true);
+		Mobile_Set_Touch_Mouse_Hidden(true);
 		if (Map.ZoneCell != -1) {
 			Map.Set_Cursor_Pos(-1);
 		}

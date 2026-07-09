@@ -1,27 +1,27 @@
-#ifndef ANDROID_TOUCH_GESTURE_H
-#define ANDROID_TOUCH_GESTURE_H
+#ifndef MOBILE_TOUCH_GESTURE_H
+#define MOBILE_TOUCH_GESTURE_H
 
-enum AndroidTouchGestureEventType {
-	ANDROID_TOUCH_MOUSE_MOVE,
-	ANDROID_TOUCH_LEFT_DOWN,
-	ANDROID_TOUCH_LEFT_UP,
-	ANDROID_TOUCH_RIGHT_DOWN,
-	ANDROID_TOUCH_RIGHT_UP
+enum MobileTouchGestureEventType {
+	MOBILE_TOUCH_MOUSE_MOVE,
+	MOBILE_TOUCH_LEFT_DOWN,
+	MOBILE_TOUCH_LEFT_UP,
+	MOBILE_TOUCH_RIGHT_DOWN,
+	MOBILE_TOUCH_RIGHT_UP
 };
 
-struct AndroidTouchGestureEvent {
-	AndroidTouchGestureEventType type;
+struct MobileTouchGestureEvent {
+	MobileTouchGestureEventType type;
 	int x;
 	int y;
 	int update_cursor;
 };
 
-struct AndroidTouchGestureOutput {
+struct MobileTouchGestureOutput {
 	int count;
-	AndroidTouchGestureEvent events[4];
+	MobileTouchGestureEvent events[4];
 };
 
-struct AndroidTouchGesture {
+struct MobileTouchGesture {
 	int primary_active;
 	int secondary_active;
 	int left_down;
@@ -37,28 +37,28 @@ struct AndroidTouchGesture {
 	unsigned long down_tick;
 };
 
-static inline int AndroidTouchGesture_Abs(int value)
+static inline int MobileTouchGesture_Abs(int value)
 {
 	return value < 0 ? -value : value;
 }
 
-static inline int AndroidTouchGesture_MovedPastSlop(AndroidTouchGesture const *touch, int x, int y)
+static inline int MobileTouchGesture_MovedPastSlop(MobileTouchGesture const *touch, int x, int y)
 {
 	static const int drag_slop = 6;
-	return AndroidTouchGesture_Abs(x - touch->start_x) > drag_slop ||
-		AndroidTouchGesture_Abs(y - touch->start_y) > drag_slop;
+	return MobileTouchGesture_Abs(x - touch->start_x) > drag_slop ||
+		MobileTouchGesture_Abs(y - touch->start_y) > drag_slop;
 }
 
-static inline void AndroidTouchGesture_ClearOutput(AndroidTouchGestureOutput *out)
+static inline void MobileTouchGesture_ClearOutput(MobileTouchGestureOutput *out)
 {
 	if (out) {
 		out->count = 0;
 	}
 }
 
-static inline void AndroidTouchGesture_Add(
-	AndroidTouchGestureOutput *out,
-	AndroidTouchGestureEventType type,
+static inline void MobileTouchGesture_Add(
+	MobileTouchGestureOutput *out,
+	MobileTouchGestureEventType type,
 	int x,
 	int y,
 	int update_cursor)
@@ -73,7 +73,7 @@ static inline void AndroidTouchGesture_Add(
 	out->count++;
 }
 
-static inline void AndroidTouchGesture_Init(AndroidTouchGesture *touch)
+static inline void MobileTouchGesture_Init(MobileTouchGesture *touch)
 {
 	if (!touch) {
 		return;
@@ -93,15 +93,15 @@ static inline void AndroidTouchGesture_Init(AndroidTouchGesture *touch)
 	touch->down_tick = 0;
 }
 
-static inline void AndroidTouchGesture_Begin(
-	AndroidTouchGesture *touch,
+static inline void MobileTouchGesture_Begin(
+	MobileTouchGesture *touch,
 	long long finger,
 	int x,
 	int y,
 	unsigned long tick,
-	AndroidTouchGestureOutput *out)
+	MobileTouchGestureOutput *out)
 {
-	AndroidTouchGesture_ClearOutput(out);
+	MobileTouchGesture_ClearOutput(out);
 	if (!touch) {
 		return;
 	}
@@ -126,33 +126,33 @@ static inline void AndroidTouchGesture_Begin(
 		touch->secondary_finger = finger;
 		touch->tap_cancelled = 1;
 		if (touch->left_down) {
-			AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_UP, touch->last_x, touch->last_y, 0);
+			MobileTouchGesture_Add(out, MOBILE_TOUCH_LEFT_UP, touch->last_x, touch->last_y, 0);
 			touch->left_down = 0;
 			touch->dragging = 0;
 		}
 	}
 }
 
-static inline void AndroidTouchGesture_Move(
-	AndroidTouchGesture *touch,
+static inline void MobileTouchGesture_Move(
+	MobileTouchGesture *touch,
 	long long finger,
 	int x,
 	int y,
-	AndroidTouchGestureOutput *out)
+	MobileTouchGestureOutput *out)
 {
-	AndroidTouchGesture_ClearOutput(out);
+	MobileTouchGesture_ClearOutput(out);
 	if (!touch || !touch->primary_active || finger != touch->primary_finger) {
 		return;
 	}
 
 	if (!touch->long_press_sent) {
-		if (!touch->left_down && AndroidTouchGesture_MovedPastSlop(touch, x, y)) {
+		if (!touch->left_down && MobileTouchGesture_MovedPastSlop(touch, x, y)) {
 			touch->left_down = 1;
 			touch->dragging = 1;
-			AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_DOWN, touch->start_x, touch->start_y, 1);
+			MobileTouchGesture_Add(out, MOBILE_TOUCH_LEFT_DOWN, touch->start_x, touch->start_y, 1);
 		}
 		if (touch->left_down) {
-			AndroidTouchGesture_Add(out, ANDROID_TOUCH_MOUSE_MOVE, x, y, 1);
+			MobileTouchGesture_Add(out, MOBILE_TOUCH_MOUSE_MOVE, x, y, 1);
 		}
 	}
 
@@ -160,38 +160,38 @@ static inline void AndroidTouchGesture_Move(
 	touch->last_y = y;
 }
 
-static inline void AndroidTouchGesture_Update(
-	AndroidTouchGesture *touch,
+static inline void MobileTouchGesture_Update(
+	MobileTouchGesture *touch,
 	unsigned long tick,
-	AndroidTouchGestureOutput *out)
+	MobileTouchGestureOutput *out)
 {
 	static const unsigned long long_press_ms = 650;
 
-	AndroidTouchGesture_ClearOutput(out);
+	MobileTouchGesture_ClearOutput(out);
 	if (!touch || !touch->primary_active || touch->secondary_active ||
 			touch->left_down || touch->long_press_sent || touch->tap_cancelled) {
 		return;
 	}
-	if (AndroidTouchGesture_MovedPastSlop(touch, touch->last_x, touch->last_y)) {
+	if (MobileTouchGesture_MovedPastSlop(touch, touch->last_x, touch->last_y)) {
 		return;
 	}
 	if ((unsigned long)(tick - touch->down_tick) < long_press_ms) {
 		return;
 	}
 
-	AndroidTouchGesture_Add(out, ANDROID_TOUCH_RIGHT_DOWN, touch->last_x, touch->last_y, 0);
-	AndroidTouchGesture_Add(out, ANDROID_TOUCH_RIGHT_UP, touch->last_x, touch->last_y, 0);
+	MobileTouchGesture_Add(out, MOBILE_TOUCH_RIGHT_DOWN, touch->last_x, touch->last_y, 0);
+	MobileTouchGesture_Add(out, MOBILE_TOUCH_RIGHT_UP, touch->last_x, touch->last_y, 0);
 	touch->long_press_sent = 1;
 }
 
-static inline void AndroidTouchGesture_End(
-	AndroidTouchGesture *touch,
+static inline void MobileTouchGesture_End(
+	MobileTouchGesture *touch,
 	long long finger,
 	int x,
 	int y,
-	AndroidTouchGestureOutput *out)
+	MobileTouchGestureOutput *out)
 {
-	AndroidTouchGesture_ClearOutput(out);
+	MobileTouchGesture_ClearOutput(out);
 	if (!touch) {
 		return;
 	}
@@ -208,18 +208,18 @@ static inline void AndroidTouchGesture_End(
 
 	if (touch->left_down) {
 		if (x != touch->last_x || y != touch->last_y) {
-			AndroidTouchGesture_Add(out, ANDROID_TOUCH_MOUSE_MOVE, x, y, 1);
+			MobileTouchGesture_Add(out, MOBILE_TOUCH_MOUSE_MOVE, x, y, 1);
 		}
-		AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_UP, x, y, 0);
+		MobileTouchGesture_Add(out, MOBILE_TOUCH_LEFT_UP, x, y, 0);
 	} else if (!touch->long_press_sent && !touch->tap_cancelled) {
-		AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_DOWN, x, y, 0);
-		AndroidTouchGesture_Add(out, ANDROID_TOUCH_LEFT_UP, x, y, 0);
+		MobileTouchGesture_Add(out, MOBILE_TOUCH_LEFT_DOWN, x, y, 0);
+		MobileTouchGesture_Add(out, MOBILE_TOUCH_LEFT_UP, x, y, 0);
 	}
 
-	AndroidTouchGesture_Init(touch);
+	MobileTouchGesture_Init(touch);
 }
 
-static inline int AndroidTouchGesture_IsPanFinger(AndroidTouchGesture const *touch, long long finger)
+static inline int MobileTouchGesture_IsPanFinger(MobileTouchGesture const *touch, long long finger)
 {
 	return touch && touch->secondary_active &&
 		(finger == touch->primary_finger || finger == touch->secondary_finger);

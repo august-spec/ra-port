@@ -27,7 +27,7 @@
 
 #include "mouse.h"
 #include <mmsystem.h>
-#if defined(__ANDROID__)
+#if defined(RA_MOBILE_TOUCH)
 #include "mac_sdl_runtime.h"
 #endif
 
@@ -184,7 +184,7 @@ void WWMouseClass::Process_Mouse(void)
 	if (!Screen || !_Mouse || State > 0 || MouseUpdate || EraseFlags || !GameInFocus)
 		return;
 
-#if defined(__ANDROID__)
+#if defined(RA_MOBILE_TOUCH)
 	if (MacSDL_TouchCursorHidden()) {
 		if (MouseBuffX != -1 || MouseBuffY != -1) {
 			if (Screen->Lock()) {
@@ -335,7 +335,7 @@ void WWMouseClass::Low_Show_Mouse(int x, int y)
 	// position.
 	//
 	if (!State)	{
-#if defined(__ANDROID__)
+#if defined(RA_MOBILE_TOUCH)
 		if (MacSDL_TouchCursorHidden()) {
 			MouseBuffX = -1;
 			MouseBuffY = -1;
@@ -469,7 +469,7 @@ void WWMouseClass::Draw_Mouse(GraphicViewPortClass *scr)
 	POINT pt;
 
 	if (State != 0) return;
-#if defined(__ANDROID__)
+#if defined(RA_MOBILE_TOUCH)
 	if (MacSDL_TouchCursorHidden()) return;
 #endif
 	MouseUpdate++;
