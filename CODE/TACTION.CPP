@@ -10,6 +10,17 @@
 
 #include	"function.h"
 
+static HousesType Normalize_Legacy_House(long value)
+{
+	if (value < HOUSE_NONE) {
+		unsigned long legacy_house = ((unsigned long)value) & 0xFFUL;
+		if (legacy_house < HOUSE_COUNT) {
+			return((HousesType)legacy_house);
+		}
+	}
+	return((HousesType)value);
+}
+
 /*
 **	These are the text names for the various actions. If the action name ends with "..." then
 **	this means that additional data is probably required.
@@ -213,6 +224,9 @@ void TActionClass::Read_INI(void)
 			Team.Set_Raw(atoi(strtok(NULL, ",")));
 			Trigger.Set_Raw(atoi(strtok(NULL, ",")));
 			Data.Value = atoi(strtok(NULL, ","));
+			if (Action_Needs(Action) == NEED_HOUSE) {
+				Data.House = Normalize_Legacy_House(Data.Value);
+			}
 			break;
 
 		case 1:
@@ -851,4 +865,3 @@ NeedType Action_Needs(TActionType action)
 	}
 	return(NEED_NONE);
 }
-

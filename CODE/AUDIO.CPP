@@ -567,6 +567,12 @@ static char const * Speech[VOX_COUNT] =  {
 static VoxType CurrentVoice = VOX_NONE;
 
 
+static bool Is_Valid_Speech(VoxType voice)
+{
+	return((unsigned)voice < VOX_COUNT);
+}
+
+
 /***********************************************************************************************
  * Speech_Name -- Fetches the name for the voice specified.                                    *
  *                                                                                             *
@@ -585,7 +591,7 @@ static VoxType CurrentVoice = VOX_NONE;
  *=============================================================================================*/
 char const * Speech_Name(VoxType speech)
 {
-	if (speech == VOX_NONE) return("none");
+	if (!Is_Valid_Speech(speech)) return("none");
 	return(Speech[speech]);
 }
 
@@ -606,7 +612,7 @@ char const * Speech_Name(VoxType speech)
  *=============================================================================================*/
 void Speak(VoxType voice)
 {
-	if (!Debug_Quiet && Options.Volume != 0 && SampleType != 0 && voice != VOX_NONE && voice != SpeakQueue && voice != CurrentVoice && SpeakQueue == VOX_NONE) {
+	if (!Debug_Quiet && Options.Volume != 0 && SampleType != 0 && Is_Valid_Speech(voice) && voice != SpeakQueue && voice != CurrentVoice && SpeakQueue == VOX_NONE) {
 		SpeakQueue = voice;
 		Speak_AI();
 	}
@@ -638,6 +644,10 @@ void Speak_AI(void)
 	if (!Is_Sample_Playing(SpeechBuffer[_index])) {
 		CurrentVoice = VOX_NONE;
 		if (SpeakQueue != VOX_NONE) {
+			if (!Is_Valid_Speech(SpeakQueue)) {
+				SpeakQueue = VOX_NONE;
+				return;
+			}
 
 			/*
 			**	Try to find a previously loaded copy of the EVA speech in one of the

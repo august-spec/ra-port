@@ -10,6 +10,17 @@
 
 #include	"function.h"
 
+static HousesType Normalize_Legacy_House(long value)
+{
+	if (value < HOUSE_NONE) {
+		unsigned long legacy_house = ((unsigned long)value) & 0xFFUL;
+		if (legacy_house < HOUSE_COUNT) {
+			return((HousesType)legacy_house);
+		}
+	}
+	return((HousesType)value);
+}
+
 /*
 **	This is the text name for all of the trigger events. These are used by the scenario editor
 */
@@ -474,6 +485,9 @@ void TEventClass::Read_INI(void)
 			Event = TEventType(atoi(strtok(NULL, ",")));
 			Team.Set_Raw(atoi(strtok(NULL, ",")));
 			Data.Value = atoi(strtok(NULL, ","));
+			if (Event_Needs(Event) == NEED_HOUSE) {
+				Data.House = Normalize_Legacy_House(Data.Value);
+			}
 			break;
 
 		case 1:

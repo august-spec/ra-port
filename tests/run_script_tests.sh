@@ -246,6 +246,15 @@ grep -F "if (Scen.Scenario == 1 && Scen.ScenarioName[2] != 'A')" "$ROOT_DIR/CODE
 grep -F "Scen.ScenarioName[2] != 'U' && Scen.ScenarioName[2] != 'G'" "$ROOT_DIR/CODE/SCENARIO.CPP" >/dev/null \
   || fail "scenario 1 CD shortcut must not bypass Allied/Soviet campaign discs"
 
+perl -0ne 'exit(/static HousesType Normalize_Legacy_House\([^)]*\)[\s\S]*legacy_house = \(\(unsigned long\)value\) & 0xFFUL[\s\S]*legacy_house < HOUSE_COUNT/s ? 0 : 1)' "$ROOT_DIR/CODE/TACTION.CPP" \
+  || fail "trigger actions must normalize legacy low-byte house values from shipped campaign INIs"
+
+perl -0ne 'exit(/Action_Needs\(Action\) == NEED_HOUSE[\s\S]{0,120}Data\.House = Normalize_Legacy_House\(Data\.Value\)/s ? 0 : 1)' "$ROOT_DIR/CODE/TACTION.CPP" \
+  || fail "house-typed trigger actions must normalize legacy house data after parsing"
+
+perl -0ne 'exit(/Event_Needs\(Event\) == NEED_HOUSE[\s\S]{0,120}Data\.House = Normalize_Legacy_House\(Data\.Value\)/s ? 0 : 1)' "$ROOT_DIR/CODE/TEVENT.CPP" \
+  || fail "house-typed trigger events must normalize legacy house data after parsing"
+
 perl -0ne 'exit(/Session\.Type == GAME_SKIRMISH[\s\S]{0,120}Session\.Type = GAME_NORMAL[\s\S]{0,120}selection = SEL_NONE/s ? 0 : 1)' "$ROOT_DIR/CODE/INIT.CPP" \
   || fail "returning from skirmish must reset to the main menu instead of auto-starting skirmish"
 
@@ -254,6 +263,21 @@ grep -R -F "memcpy((char*)&Path" "$ROOT_DIR/CODE" >/dev/null \
 
 perl -0ne 'exit(/void Move_Point\([^)]*\)\s*\{(?:(?!void Normal_Move_Point)[\s\S])*static signed char const CosTable\[256\](?:(?!void Normal_Move_Point)[\s\S])*static signed char const SinTable\[256\]/s ? 0 : 1)' "$ROOT_DIR/CODE/COORD.CPP" \
   || fail "Move_Point must use signed trig tables so coordinate movement is portable across Android targets"
+
+perl -0ne 'exit(/static void \* operator new\(size_t size\) throw\(\)/s ? 0 : 1)' "$ROOT_DIR/CODE/ANIM.H" \
+  || fail "AnimClass pool allocation must be declared throw() so null allocations skip construction on modern Clang"
+
+perl -0ne 'exit(/void \* AnimClass::operator new\(size_t\) throw\(\)[\s\S]*Anims\.Allocate\(\)/s ? 0 : 1)' "$ROOT_DIR/CODE/ANIM.CPP" \
+  || fail "AnimClass pool allocation definition must be throw() so exhausted animation heaps do not construct at null"
+
+perl -0ne 'exit(/static bool Is_Valid_Speech\(VoxType voice\)\s*\{[^}]*\(unsigned\)voice < VOX_COUNT/s ? 0 : 1)' "$ROOT_DIR/CODE/AUDIO.CPP" \
+  || fail "speech playback must validate VoxType values before indexing the Speech table"
+
+perl -0ne 'exit(/void Speak\(VoxType voice\)\s*\{(?:(?!void Speak_AI)[\s\S])*Is_Valid_Speech\(voice\)(?:(?!void Speak_AI)[\s\S])*SpeakQueue = voice/s ? 0 : 1)' "$ROOT_DIR/CODE/AUDIO.CPP" \
+  || fail "Speak must reject invalid speech ids before queueing them"
+
+perl -0ne 'exit(/void Speak_AI\(void\)\s*\{(?:(?!_makepath)[\s\S])*if \(!Is_Valid_Speech\(SpeakQueue\)\)[\s\S]*SpeakQueue = VOX_NONE[\s\S]*_makepath\(name, NULL, NULL, Speech\[SpeakQueue\]/s ? 0 : 1)' "$ROOT_DIR/CODE/AUDIO.CPP" \
+  || fail "Speak_AI must clear invalid queued speech ids before indexing the Speech table"
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
