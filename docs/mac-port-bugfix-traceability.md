@@ -4,6 +4,29 @@ This note documents four macOS/runtime bugs found while testing the Red Alert
 port with the original campaign assets. It is intended as PR context for
 maintainers and as a future debugging breadcrumb.
 
+## Scope And Evidence
+
+The investigation used an Apple Silicon macOS build and locally installed,
+original Red Alert campaign assets. User-supplied macOS crash reports provided
+the initial faulting stacks; they are deliberately not included in this
+repository because they are machine-specific artifacts.
+
+The first two crashes were observed during normal gameplay but did not have a
+single deterministic player-input sequence. The campaign and WSA failures have
+repeatable flows:
+
+| Finding | Reproduction | Expected Result After Fix |
+| --- | --- | --- |
+| Animation pool exhaustion | Play a sufficiently effect-heavy scenario until the fixed animation pool is exhausted. | The allocation returns `NULL` and construction is skipped rather than running with a null `this` pointer. |
+| Invalid speech ID | Continue gameplay until an invalid `VoxType` reaches the speech queue. | The invalid value is discarded before any `Speech[]` table lookup. |
+| Campaign victory reported as failure | Start Allied mission 1 or Soviet mission 1 and complete its win objective. | The mission reports victory and advances normally. |
+| Map selection WSA crash | Complete a campaign mission and enter the next-map selection screen. | The map-selection animation reads 32-bit file offsets and does not issue an invalid copy. |
+
+For WSA compatibility context, the on-disk frame-offset table is fixed-width
+32-bit data and the legacy delta size has a 37-byte quirk. The implementation
+was cross-checked against the [Westwood WSA format](https://moddingwiki.shikadi.net/wiki/Westwood_WSA_Format)
+and [Vanilla Conquer's WSA decoder](https://github.com/TheAssemblyArmada/Vanilla-Conquer/blob/vanilla/common/wsa.cpp).
+
 ## 1. Animation Pool Exhaustion Crash
 
 ### Symptom
@@ -188,7 +211,7 @@ Automated checks:
 
 ```sh
 tests/run_script_tests.sh
-cmake --build build --target redalert_mac -j 8
+cmake --build build --target redalert_mac --clean-first -j 8
 scripts/run_mac_dev.sh --prepare-only --no-build
 ```
 
@@ -202,3 +225,27 @@ Expected warnings:
 - The current macOS build emits existing warnings around deprecated `sprintf`,
   non-portable include casing, and legacy template declarations. These warnings
   are not introduced by the fixes above.
+
+## Review Follow-Up
+
+A fresh review found no additional functional regression in these fixes. The
+new checks in `tests/run_script_tests.sh` are source-level pattern checks, not
+binary decoder or campaign-parser tests. They protect the chosen implementation
+shape, but do not execute the WSA crash path or parse `-255` and `-254` through
+the scenario loader.
+
+The review also noted a style-only difference: some new WSA guard clauses use
+the surrounding module's shorthand null and zero checks, while `CODE/STYLE.H`
+prefers explicit comparisons. This has no gameplay impact and remains a
+maintainer cleanup decision rather than a functional follow-up.
+
+The next focused test should use a synthetic WSA fixture to prove all of the
+following at runtime:
+
+- 32-bit frame offsets remain distinct on LP64 hosts.
+- A zero offset sentinel remains zero after palette adjustment.
+- Out-of-order or oversized deltas fail before copying.
+- A legacy low-byte house value resolves to the expected `HousesType`.
+
+Until that exists, replay the campaign completion and map-selection flow after
+changing WSA or trigger parsing code.

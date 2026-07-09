@@ -209,6 +209,10 @@ Run the source-level tests and script checks:
 tests/run_script_tests.sh
 ```
 
+For the macOS crash investigations, root causes, reproduction paths, and
+remaining regression-test follow-up, see the
+[bugfix traceability note](docs/mac-port-bugfix-traceability.md).
+
 Validate a fresh checkout with a full build first:
 
 ```sh
